@@ -128,4 +128,4 @@ cd frontend && npm run dev
 cd backend && npm run start:dev
 ```
 # Trigger GitHub Actions
-# EKS authentication fixed - trigger workflowd
+# EKS authentication fixed - trigger workflowd1
