@@ -37,7 +37,7 @@ jobs:
       working-directory: ./backend
       run: npm ci
 
-  build-and-push:
+  build-and-deploy:
     needs: test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
@@ -45,6 +45,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
+    # AWS 자격 증명을 한 번만 구성
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
@@ -52,37 +53,27 @@ jobs:
         aws-region: ${{ env.AWS_REGION }}
         role-session-name: github-actions-${{ github.run_id }}
     
+    # ECR 로그인
     - name: Login to Amazon ECR
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
     
+    # 백엔드 빌드 및 푸시
     - name: Build and push Backend image
       working-directory: ./backend
       run: |
         docker build -t backend .
         docker tag backend:latest ${{ steps.login-ecr.outputs.registry }}/cicd-demo-backend:latest
         docker push ${{ steps.login-ecr.outputs.registry }}/cicd-demo-backend:latest
-
-  deploy-backend:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
     
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        role-to-assume: arn:aws:iam::471303021447:role/github-actions-role
-        aws-region: ${{ env.AWS_REGION }}
-    
+    # EKS 설정
     - name: Update kubeconfig
       run: |
         aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
         aws sts get-caller-identity
         kubectl config view
     
+    # 백엔드 배포
     - name: Deploy Backend to EKS
       run: |
         # Apply aws-auth ConfigMap first for cluster access
@@ -118,22 +109,9 @@ jobs:
         
         # Wait for deployment to be ready
         kubectl rollout status deployment/backend -n cicd-demo --timeout=300s
-
-  deploy-frontend:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
     
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        role-to-assume: arn:aws:iam::471303021447:role/github-actions-role
-        aws-region: ${{ env.AWS_REGION }}
-    
-    - name: Setup Node.js
+    # 프론트엔드 빌드 및 배포
+    - name: Setup Node.js for Frontend
       uses: actions/setup-node@v4
       with:
         node-version: '18'
@@ -148,7 +126,7 @@ jobs:
         VITE_API_URL: ${{ secrets.API_URL }}
       run: npm run build
     
-    - name: Deploy to S3
+    - name: Deploy Frontend to S3
       run: |
         aws s3 sync ./frontend/dist s3://${{ env.S3_BUCKET_NAME }} --delete
     
