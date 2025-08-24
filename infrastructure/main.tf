@@ -68,36 +68,41 @@ module "eks" {
 }
 
 # aws-auth ConfigMap (EKS 클러스터 생성 후 자동 생성)
-# resource "kubernetes_config_map" "aws_auth" {
-#   metadata {
-#     name      = "aws-auth"
-#     namespace = "kube-system"
-#   }
-#
-#   data = {
-#     mapRoles = yamlencode([
-#       {
-#         rolearn  = aws_iam_role.node_group.arn
-#         username = "system:node:{{EC2PrivateDNSName}}"
-#         groups   = ["system:bootstrappers", "system:nodes"]
-#       }
-#     ])
-#     mapUsers = yamlencode([
-#       {
-#         userarn  = "arn:aws:iam::471303021447:user/my_user"
-#         username = "my_user"
-#         groups   = ["system:masters"]
-#       }
-#     ])
-#   }
-#
-#   depends_on = [module.eks]
-#   
-#   # aws-auth ConfigMap이 생성된 후 잠시 대기
-#   provisioner "local-exec" {
-#     command = "sleep 30"
-#   }
-# }
+resource "kubernetes_config_map" "aws_auth" {
+  metadata {
+    name      = "aws-auth"
+    namespace = "kube-system"
+  }
+
+  data = {
+    mapRoles = yamlencode([
+      {
+        rolearn  = aws_iam_role.node_group.arn
+        username = "system:node:{{EC2PrivateDNSName}}"
+        groups   = ["system:bootstrappers", "system:nodes"]
+      },
+      {
+        rolearn  = aws_iam_role.github_actions.arn
+        username = "github-actions"
+        groups   = ["system:masters"]
+      }
+    ])
+    mapUsers = yamlencode([
+      {
+        userarn  = "arn:aws:iam::471303021447:user/my_user"
+        username = "my_user"
+        groups   = ["system:masters"]
+      }
+    ])
+  }
+
+  depends_on = [module.eks]
+  
+  # aws-auth ConfigMap이 생성된 후 잠시 대기
+  provisioner "local-exec" {
+    command = "sleep 30"
+  }
+}
 
 # EKS Node Group
 resource "aws_eks_node_group" "main" {
