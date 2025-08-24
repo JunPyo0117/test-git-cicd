@@ -69,26 +69,21 @@ jobs:
     # EKS 설정
     - name: Update kubeconfig
       run: |
-        aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+        aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }} --role-arn arn:aws:iam::471303021447:role/github-actions-role
         aws sts get-caller-identity
-        kubectl config view
+        
+        # Test EKS access with proper authentication
+        kubectl get nodes --validate=false
+        
+        # Apply aws-auth ConfigMap to enable GitHub Actions access
+        kubectl apply -f k8s/aws-auth-configmap.yaml --validate=false
     
     # 백엔드 배포
     - name: Deploy Backend to EKS
       run: |
-        # Apply aws-auth ConfigMap first for cluster access
-        kubectl apply -f k8s/aws-auth-configmap.yaml --validate=false
-        
-        # Wait for aws-auth to take effect and verify access
-        echo "Waiting for aws-auth ConfigMap to take effect..."
-        for i in {1..10}; do
-          if kubectl get nodes --validate=false >/dev/null 2>&1; then
-            echo "Successfully connected to EKS cluster!"
-            break
-          fi
-          echo "Attempt $i: Waiting for cluster access..."
-          sleep 10
-        done
+        # Verify EKS cluster access
+        echo "Verifying EKS cluster access..."
+        kubectl get nodes --validate=false
         
         # Apply namespace
         kubectl apply -f k8s/namespace.yaml --validate=false
