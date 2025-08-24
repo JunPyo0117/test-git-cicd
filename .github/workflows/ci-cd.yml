@@ -75,7 +75,10 @@ jobs:
         aws-region: ${{ env.AWS_REGION }}
     
     - name: Update kubeconfig
-      run: aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+      run: |
+        aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+        aws sts get-caller-identity
+        kubectl config view
     
     - name: Deploy Backend to EKS
       run: |
