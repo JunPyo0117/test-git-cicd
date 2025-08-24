@@ -8,11 +8,10 @@ metadata:
     alb.ingress.kubernetes.io/scheme: "internet-facing"
     alb.ingress.kubernetes.io/target-type: "ip"
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
-    alb.ingress.kubernetes.io/ssl-redirect: "443"
     alb.ingress.kubernetes.io/group.name: "cicd-demo"
     alb.ingress.kubernetes.io/group.order: "1"
     alb.ingress.kubernetes.io/healthcheck-path: "/api/messages/health"
-    alb.ingress.kubernetes.io/healthcheck-port: "80"
+    alb.ingress.kubernetes.io/healthcheck-port: "3001"
     alb.ingress.kubernetes.io/healthcheck-protocol: "HTTP"
     alb.ingress.kubernetes.io/success-codes: "200"
     alb.ingress.kubernetes.io/cors-allow-origin: "*"
@@ -21,6 +20,7 @@ metadata:
     alb.ingress.kubernetes.io/cors-expose-headers: "*"
     alb.ingress.kubernetes.io/cors-max-age: "600"
 spec:
+  ingressClassName: alb
   rules:
   - host: api.cicd-demo.local
     http:

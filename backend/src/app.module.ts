@@ -16,7 +16,7 @@ import { MessagesModule } from './messages/messages.module';
       password: process.env.DB_PASSWORD || 'password',
       database: process.env.DB_NAME || 'cicd_demo',
       entities: [__dirname + '/**/*.entity{.ts,.js}'],
-      synchronize: process.env.NODE_ENV !== 'production', // 프로덕션에서는 false로 설정
+      synchronize: process.env.TYPEORM_SYNC === 'true' || process.env.NODE_ENV !== 'production', // 환경변수로 제어
       logging: process.env.NODE_ENV !== 'production',
       // SSL 설정 (AWS RDS용)
       ssl: process.env.NODE_ENV === 'production' ? {
