@@ -18,6 +18,16 @@ import { MessagesModule } from './messages/messages.module';
       entities: [__dirname + '/**/*.entity{.ts,.js}'],
       synchronize: process.env.NODE_ENV !== 'production', // 개발 환경에서만 true
       logging: process.env.NODE_ENV !== 'production',
+      // 연결 설정 추가
+      connectTimeoutMS: 30000, // 30초
+      extra: {
+        connectionTimeoutMillis: 30000,
+        query_timeout: 30000,
+        statement_timeout: 30000,
+      },
+      // 재시도 설정
+      retryAttempts: 10,
+      retryDelay: 3000, // 3초
     }),
     MessagesModule,
   ],

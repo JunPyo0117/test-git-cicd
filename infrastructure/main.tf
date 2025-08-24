@@ -149,8 +149,16 @@ resource "aws_security_group" "rds" {
     from_port   = 5432
     to_port     = 5432
     protocol    = "tcp"
-    # EKS 노드 그룹에서 접근 허용
+    # EKS 클러스터에서 접근 허용
     security_groups = [module.eks.cluster_security_group_id]
+  }
+  
+  ingress {
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    # EKS 노드 그룹에서 접근 허용
+    security_groups = [module.eks.node_security_group_id]
   }
   
   egress {
