@@ -65,103 +65,70 @@ module "eks" {
   
   vpc_id     = module.vpc.vpc_id
   subnet_ids = concat(module.vpc.private_subnets, module.vpc.public_subnets)
+  
+  # 노드 그룹 설정
+  eks_managed_node_groups = {
+    main = {
+      name         = "main"
+      min_size     = 1
+      max_size     = 2
+      desired_size = 1
+      instance_types = ["t3.medium"]
+      subnet_ids = module.vpc.private_subnets
+    }
+  }
 }
 
-# aws-auth ConfigMap (EKS 클러스터 생성 후 자동 생성)
-resource "kubernetes_config_map" "aws_auth" {
-  metadata {
-    name      = "aws-auth"
-    namespace = "kube-system"
+# IAM User for EKS access (로컬 개발용)
+resource "aws_iam_user" "my_user" {
+  name = "my_user"
+  
+  tags = {
+    Name = "my_user"
   }
+}
 
-  data = {
-    mapRoles = yamlencode([
+# IAM Access Key for my_user
+resource "aws_iam_access_key" "my_user" {
+  user = aws_iam_user.my_user.name
+}
+
+# IAM Policy for my_user to access EKS
+resource "aws_iam_policy" "my_user_eks_access" {
+  name = "my-user-eks-access-policy"
+  
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
       {
-        rolearn  = aws_iam_role.node_group.arn
-        username = "system:node:{{EC2PrivateDNSName}}"
-        groups   = ["system:bootstrappers", "system:nodes"]
+        Effect = "Allow"
+        Action = [
+          "eks:DescribeCluster",
+          "eks:ListClusters",
+          "eks:AccessKubernetesApi"
+        ]
+        Resource = "*"
       },
       {
-        rolearn  = aws_iam_role.github_actions.arn
-        username = "github-actions"
-        groups   = ["system:masters"]
+        Effect = "Allow"
+        Action = [
+          "eks:GetToken"
+        ]
+        Resource = module.eks.cluster_arn
       }
-    ])
-    mapUsers = yamlencode([
-      {
-        userarn  = "arn:aws:iam::471303021447:user/my_user"
-        username = "my_user"
-        groups   = ["system:masters"]
-      }
-    ])
-  }
-
-  depends_on = [module.eks]
-  
-  # aws-auth ConfigMap이 생성된 후 잠시 대기
-  provisioner "local-exec" {
-    command = "sleep 30"
-  }
-}
-
-# EKS Node Group
-resource "aws_eks_node_group" "main" {
-  cluster_name    = module.eks.cluster_name
-  node_group_name = "main"
-  node_role_arn   = aws_iam_role.node_group.arn
-  subnet_ids      = module.vpc.private_subnets
-
-  scaling_config {
-    desired_size = 1
-    max_size     = 2
-    min_size     = 1
-  }
-
-  instance_types = ["t3.medium"]
-
-  depends_on = [
-    aws_iam_role_policy_attachment.node_group_AmazonEKSWorkerNodePolicy,
-    aws_iam_role_policy_attachment.node_group_AmazonEKS_CNI_Policy,
-    aws_iam_role_policy_attachment.node_group_AmazonEC2ContainerRegistryReadOnly,
-    aws_iam_role_policy_attachment.node_group_AmazonEC2FullAccess,
-  ]
-}
-
-# IAM role for EKS Node Group
-resource "aws_iam_role" "node_group" {
-  name = "eks-node-group-role"
-
-  assume_role_policy = jsonencode({
-    Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
-      Principal = {
-        Service = "ec2.amazonaws.com"
-      }
-    }]
-    Version = "2012-10-17"
+    ]
   })
 }
 
-resource "aws_iam_role_policy_attachment" "node_group_AmazonEKSWorkerNodePolicy" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
-  role       = aws_iam_role.node_group.name
+# Attach policy to my_user
+resource "aws_iam_user_policy_attachment" "my_user_eks_access" {
+  user       = aws_iam_user.my_user.name
+  policy_arn = aws_iam_policy.my_user_eks_access.arn
 }
 
-resource "aws_iam_role_policy_attachment" "node_group_AmazonEKS_CNI_Policy" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
-  role       = aws_iam_role.node_group.name
-}
 
-resource "aws_iam_role_policy_attachment" "node_group_AmazonEC2ContainerRegistryReadOnly" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
-  role       = aws_iam_role.node_group.name
-}
 
-resource "aws_iam_role_policy_attachment" "node_group_AmazonEC2FullAccess" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2FullAccess"
-  role       = aws_iam_role.node_group.name
-}
+
 
 # ECR Repositories
 resource "aws_ecr_repository" "frontend" {
@@ -619,48 +586,11 @@ resource "aws_cloudfront_response_headers_policy" "cors" {
   }
 }
 
-# Kubernetes Provider 설정
-# provider "kubernetes" {
-#   host                   = module.eks.cluster_endpoint
-#   cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
-#   
-#   exec {
-#     api_version = "client.authentication.k8s.io/v1beta1"
-#     command     = "aws"
-#     args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name]
-#   }
-# }
 
-# Kubernetes Namespace
-# resource "kubernetes_namespace" "cicd_demo" {
-#   metadata {
-#     name = "cicd-demo"
-#   }
-#   
-#   depends_on = [kubernetes_config_map.aws_auth]
-# }
 
-# Database Secret
-# resource "kubernetes_secret" "db_secret" {
-#   metadata {
-#     name      = "db-secret"
-#     namespace = kubernetes_namespace.cicd_demo.metadata[0].name
-#   }
-#
-#   data = {
-#     host     = aws_db_instance.main.endpoint
-#     port     = "5432"
-#     username = aws_db_instance.main.username
-#     password = random_password.db_password.result
-#     database = aws_db_instance.main.db_name
-#   }
-#
-#   type = "Opaque"
-#   
-#   depends_on = [kubernetes_namespace.cicd_demo]
-# }
 
-# GitHub Actions용 IAM 역할 (OIDC Provider 기반)
+
+# IAM role for GitHub Actions
 resource "aws_iam_role" "github_actions" {
   name = "github-actions-role"
 
@@ -690,7 +620,7 @@ resource "aws_iam_role" "github_actions" {
   }
 }
 
-# GitHub Actions용 IAM 정책
+# IAM Policy for GitHub Actions
 resource "aws_iam_policy" "github_actions" {
   name = "github-actions-policy"
   

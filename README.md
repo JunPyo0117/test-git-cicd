@@ -1,169 +1,185 @@
-# AWS CI/CD 파이프라인 프로젝트
+# EKS CI/CD 데모 프로젝트
 
-이 프로젝트는 GitHub Actions를 사용하여 AWS 클라우드에 React 프론트엔드와 NestJS 백엔드를 배포하는 CI/CD 파이프라인을 구현합니다.
+이 프로젝트는 AWS EKS를 사용한 완전한 CI/CD 파이프라인을 구현한 데모입니다.
 
-## 아키텍처 개요
+## 🏗️ 아키텍처
 
-### CI/CD 파이프라인
-- **GitHub** → **GitHub Actions** → **Docker** → **AWS ECR** → **AWS EKS**
+- **Frontend**: React + Vite + TypeScript
+- **Backend**: NestJS + TypeScript
+- **Database**: PostgreSQL (RDS)
+- **Infrastructure**: Terraform + AWS EKS
+- **CI/CD**: GitHub Actions
+- **Container Registry**: AWS ECR
+- **Load Balancer**: AWS ALB + AWS Load Balancer Controller
+- **CDN**: CloudFront
 
-### AWS 클라우드 아키텍처
-- **Frontend**: React 앱이 S3에 호스팅되고 CloudFront를 통해 CDN 제공
-- **Backend**: NestJS 앱이 EKS에서 실행되며 RDS와 연결
-- **Load Balancer**: AWS Load Balancer Controller를 통한 ALB 자동 생성
-- **DNS**: Route 53을 통한 도메인 관리
-- **사용자 접근**: Route 53 → CloudFront → S3 (React) → ALB → EKS (NestJS) → RDS
+## 📋 사전 요구사항
 
-## 프로젝트 구조
+- AWS CLI
+- Terraform
+- kubectl
+- Docker
+- Node.js 18+
+
+## 🚀 빠른 시작
+
+### 1. 인프라 배포
+
+```bash
+cd infrastructure
+terraform init
+terraform plan
+terraform apply
+```
+
+### 2. GitHub Secrets 설정
+
+GitHub 저장소의 Settings > Secrets and variables > Actions에서 다음 시크릿을 설정하세요:
+
+#### 필수 시크릿
+- `AWS_ACCESS_KEY_ID`: AWS 액세스 키 ID
+- `AWS_SECRET_ACCESS_KEY`: AWS 시크릿 액세스 키
+- `DB_HOST`: RDS 엔드포인트
+- `DB_PASSWORD`: RDS 데이터베이스 비밀번호
+- `S3_BUCKET`: S3 버킷 이름
+- `CLOUDFRONT_DISTRIBUTION_ID`: CloudFront 배포 ID
+- `API_URL`: 백엔드 API URL (ALB URL)
+
+### 3. 코드 푸시로 자동 배포
+
+```bash
+git add .
+git commit -m "Initial deployment"
+git push origin main
+```
+
+GitHub Actions가 자동으로 다음을 수행합니다:
+- 프론트엔드/백엔드 테스트
+- Docker 이미지 빌드 및 ECR 푸시
+- EKS 클러스터에 백엔드 배포
+- S3에 프론트엔드 배포
+- CloudFront 캐시 무효화
+
+## 🔧 문제 해결
+
+### EKS 클러스터 접근 문제
+
+만약 GitHub Actions에서 EKS 배포가 실패하는 경우:
+
+1. **IAM 역할 권한 확인**
+   ```bash
+   aws iam get-role --role-name github-actions-role
+   aws iam list-attached-role-policies --role-name github-actions-role
+   ```
+
+2. **aws-auth ConfigMap 확인**
+   ```bash
+   kubectl get configmap aws-auth -n kube-system -o yaml
+   ```
+
+3. **GitHub Actions 로그 확인**
+   - GitHub 저장소의 Actions 탭에서 워크플로우 실행 로그 확인
+
+### 일반적인 문제들
+
+- **권한 오류**: GitHub Actions IAM 역할에 적절한 EKS 권한이 부여되었는지 확인
+- **네트워크 오류**: VPC와 서브넷 설정 확인
+- **인증 오류**: GitHub Secrets 설정 확인
+
+## 📁 프로젝트 구조
 
 ```
-├── frontend/                 # React 프론트엔드
-├── backend/                  # NestJS 백엔드
-├── infrastructure/           # Terraform 인프라 코드
-│   ├── main.tf              # 메인 인프라 설정
-│   ├── variables.tf         # 변수 정의
-│   ├── outputs.tf           # 출력값 정의
-│   └── aws-load-balancer-controller-policy.json  # Load Balancer Controller 정책
-├── k8s/                     # Kubernetes 매니페스트
-│   ├── namespace.yaml       # 네임스페이스
-│   ├── backend-deployment.yaml  # 백엔드 배포
-│   ├── backend-service.yaml     # 백엔드 서비스
-│   ├── ingress.yaml         # ALB Ingress
-│   └── aws-load-balancer-controller-sa.yaml  # Load Balancer Controller ServiceAccount
-├── scripts/                 # 설치 스크립트 (로컬 개발용)
-├── .github/
-│   └── workflows/           # GitHub Actions 워크플로우
-├── docker-compose.yml       # 로컬 개발용 Docker Compose
+test-git-cicd/
+├── infrastructure/          # Terraform 인프라 코드
+│   ├── main.tf             # 메인 테라폼 설정
+│   ├── variables.tf        # 변수 정의
+│   └── outputs.tf          # 출력 값들
+├── k8s/                    # Kubernetes 매니페스트
+│   ├── namespace.yaml      # 네임스페이스
+│   ├── backend-deployment.yaml
+│   ├── backend-service.yaml
+│   ├── ingress.yaml
+│   └── db-secret.yaml
+├── frontend/               # React 프론트엔드
+├── backend/                # NestJS 백엔드
+├── .github/workflows/      # GitHub Actions 워크플로우
+│   └── ci-cd.yml          # CI/CD 파이프라인
 └── README.md
 ```
 
-## 시작하기
+## 🔐 보안
 
-### 사전 요구사항
-- AWS CLI 설정
-- Docker 설치
-- Node.js 18+
-- kubectl 설치
-- Terraform 설치
+- GitHub Actions는 OIDC를 통해 AWS에 인증합니다
+- RDS는 프라이빗 서브넷에 배치됩니다
+- ECR 리포지토리는 암호화됩니다
+- 모든 트래픽은 HTTPS를 통해 전송됩니다
 
-### 환경 변수 설정
+## 📊 모니터링
+
+### GitHub Actions 모니터링
+
+- GitHub 저장소의 Actions 탭에서 워크플로우 실행 상태 확인
+- 각 단계별 로그 확인
+
+### AWS 리소스 모니터링
+
 ```bash
-# AWS 자격 증명
-export AWS_ACCESS_KEY_ID=your_access_key
-export AWS_SECRET_ACCESS_KEY=your_secret_key
-export AWS_DEFAULT_REGION=ap-northeast-2
+# EKS 클러스터 상태
+aws eks describe-cluster --name cicd-cluster --region ap-northeast-2
 
-# GitHub Secrets 설정 필요
-# AWS_ACCESS_KEY_ID
-# AWS_SECRET_ACCESS_KEY
-# AWS_REGION
-# ECR_REPOSITORY_NAME
-# EKS_CLUSTER_NAME
-# S3_BUCKET_NAME
-# CLOUDFRONT_DISTRIBUTION_ID
-# API_URL (백엔드 API URL)
+# ALB 상태
+aws elbv2 describe-load-balancers
+
+# RDS 상태
+aws rds describe-db-instances --db-instance-identifier cicd-database
 ```
 
-### 배포 순서
-1. AWS 인프라 배포 (Terraform)
-2. GitHub Secrets 설정
-3. 코드 푸시하여 CI/CD 파이프라인 실행
-   - 네임스페이스 자동 생성
-   - Load Balancer Controller 자동 설치
-   - Kubernetes 리소스 자동 배포
-   - Docker 이미지 빌드 및 ECR 푸시
-   - EKS 자동 배포
+### 애플리케이션 상태 확인
 
-### GitHub Actions 워크플로우
-- **테스트**: 프론트엔드와 백엔드 의존성 설치 및 테스트
-- **빌드 및 푸시**: Docker 이미지 빌드 및 ECR 푸시
-- **백엔드 배포**: 
-  - 네임스페이스 생성
-  - Load Balancer Controller 설치
-  - Kubernetes 리소스 배포
-- **프론트엔드 배포**: S3 업로드 및 CloudFront 무효화
-
-## 기술 스택
-
-- **Frontend**: React, TypeScript, Vite
-- **Backend**: NestJS, TypeScript, TypeORM
-- **Database**: PostgreSQL (AWS RDS)
-- **Container**: Docker
-- **Orchestration**: Kubernetes (AWS EKS)
-- **Load Balancer**: AWS Application Load Balancer (ALB)
-- **CI/CD**: GitHub Actions
-- **Infrastructure**: Terraform
-- **CDN**: AWS CloudFront
-- **Storage**: AWS S3
-- **DNS**: AWS Route 53
-
-## 주요 기능
-
-### 자동화된 인프라 관리
-- Terraform을 통한 Infrastructure as Code
-- AWS Load Balancer Controller 자동 설치
-- EKS 클러스터 자동 구성
-
-### CI/CD 파이프라인
-- GitHub Actions를 통한 자동 빌드/배포
-- Docker 이미지 자동 빌드 및 ECR 푸시
-- EKS 자동 배포
-- S3/CloudFront 자동 업데이트
-
-### 로드 밸런싱
-- ALB를 통한 트래픽 분산
-- Ingress를 통한 라우팅 규칙 관리
-- 자동 스케일링 지원
-
-### Health Check
-- Kubernetes Liveness/Readiness Probe
-- Docker Health Check
-- ALB Health Check
-
-## 로컬 개발
-
-### 로컬 환경 실행
 ```bash
-# 전체 스택 실행
-docker-compose up -d
+# kubeconfig 설정
+aws eks update-kubeconfig --name cicd-cluster --region ap-northeast-2
 
-# 프론트엔드 접속
-open http://localhost:3000
+# Pod 상태 확인
+kubectl get pods -n cicd-demo
 
-# 백엔드 API 테스트
-curl http://localhost:3001/api/messages
-curl http://localhost:3001/api/messages/health
+# Service 상태 확인
+kubectl get services -n cicd-demo
+
+# Ingress 상태 확인
+kubectl get ingress -n cicd-demo
+
+# 로그 확인
+kubectl logs -f deployment/backend -n cicd-demo
 ```
 
-### 개별 실행1
-```bash
-# Frontend
-cd frontend && npm run dev
+## 🚨 트러블슈팅
 
-# Backend
-cd backend && npm run start:dev
-```
+### 자주 발생하는 문제들
 
-## 최근 수정사항
+1. **GitHub Actions EKS 배포 실패**
+   - IAM 역할 권한 확인
+   - aws-auth ConfigMap 설정 확인
+   - GitHub Secrets 설정 확인
 
-### 버그 수정
-- ✅ Health check 엔드포인트 추가 (`/api/messages/health`)
-- ✅ Kubernetes 포트 설정 수정 (3001 포트 일치)
-- ✅ Ingress 설정 개선
-- ✅ 네임스페이스 자동 생성
-- ✅ ALB Target Group 포트 수정
-- ✅ Docker health check 스크립트 개선
-- ✅ 데이터베이스 SSL 설정 개선
+2. **Pod가 Running 상태가 안됨**
+   - GitHub Actions 로그에서 이미지 풀 오류 확인
+   - 리소스 부족 여부 확인
+   - 시크릿 설정 확인
 
-### 보안 개선
-- ✅ 프로덕션 환경에서 synchronize 비활성화
-- ✅ 환경별 SSL 설정 분리
-- ✅ 적절한 리소스 제한 설정
+3. **Ingress가 External IP를 받지 못함**
+   - AWS Load Balancer Controller 설치 확인
+   - IAM 역할 권한 확인
 
-## 트러블슈팅
+## 📞 지원
 
-### 일반적인 문제
-1. **Health Check 실패**: `/api/messages/health` 엔드포인트 확인
-2. **포트 불일치**: 백엔드는 3001 포트에서 실행
-3. **네임스페이스 문제**: `cicd-demo` 네임스페이스가 자동 생성됨
-4. **데이터베이스 연결**: RDS SSL 설정 확인
+문제가 발생하면 다음 순서로 확인해보세요:
+
+1. GitHub Actions 워크플로우 로그 확인
+2. AWS CloudWatch 로그 확인
+3. kubectl describe 명령어로 상세 정보 확인
+4. GitHub Issues에 문제 등록
+
+## �� 라이선스
+
+MIT License

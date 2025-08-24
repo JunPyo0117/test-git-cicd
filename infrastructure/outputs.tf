@@ -113,3 +113,41 @@ output "target_group_arn" {
   description = "ALB target group ARN"
   value       = aws_lb_target_group.backend.arn
 }
+
+# IAM User outputs
+output "my_user_arn" {
+  description = "ARN of the my_user IAM user"
+  value       = aws_iam_user.my_user.arn
+}
+
+output "my_user_access_key_id" {
+  description = "Access key ID for my_user"
+  value       = aws_iam_access_key.my_user.id
+  sensitive   = true
+}
+
+output "my_user_secret_access_key" {
+  description = "Secret access key for my_user"
+  value       = aws_iam_access_key.my_user.secret
+  sensitive   = true
+}
+
+output "cluster_name" {
+  description = "EKS cluster name"
+  value       = module.eks.cluster_name
+}
+
+output "cluster_arn" {
+  description = "EKS cluster ARN"
+  value       = module.eks.cluster_arn
+}
+
+output "oidc_provider_arn" {
+  description = "EKS OIDC provider ARN"
+  value       = module.eks.oidc_provider_arn
+}
+
+output "oidc_provider" {
+  description = "EKS OIDC provider"
+  value       = module.eks.oidc_provider
+}

@@ -45,13 +45,13 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    # AWS 자격 증명을 한 번만 구성
+    # AWS 자격 증명 구성 (Access Key 사용)
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: arn:aws:iam::471303021447:role/github-actions-role
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_REGION }}
-        role-session-name: github-actions-${{ github.run_id }}
     
     # ECR 로그인
     - name: Login to Amazon ECR
@@ -69,24 +69,24 @@ jobs:
     # EKS 설정
     - name: Update kubeconfig
       run: |
-        aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }} --role-arn arn:aws:iam::471303021447:role/github-actions-role
+        aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
         aws sts get-caller-identity
         
-        # Test EKS access with proper authentication
-        kubectl get nodes --validate=false
+        # Test EKS access
+        kubectl get nodes
         
-        # Apply aws-auth ConfigMap to enable GitHub Actions access
-        kubectl apply -f k8s/aws-auth-configmap.yaml --validate=false
+        # Apply aws-auth ConfigMap if needed
+        kubectl apply -f k8s/aws-auth-configmap.yaml
     
     # 백엔드 배포
     - name: Deploy Backend to EKS
       run: |
         # Verify EKS cluster access
         echo "Verifying EKS cluster access..."
-        kubectl get nodes --validate=false
+        kubectl get nodes
         
         # Apply namespace
-        kubectl apply -f k8s/namespace.yaml --validate=false
+        kubectl apply -f k8s/namespace.yaml
         
         # Create database secret
         kubectl create secret generic db-secret \
@@ -95,12 +95,12 @@ jobs:
           --from-literal=username=postgres \
           --from-literal=password=${{ secrets.DB_PASSWORD }} \
           --from-literal=database=cicd_demo \
-          -n cicd-demo --dry-run=client -o yaml | kubectl apply -f - --validate=false
+          -n cicd-demo --dry-run=client -o yaml | kubectl apply -f -
         
         # Apply Kubernetes manifests
-        kubectl apply -f k8s/backend-deployment.yaml --validate=false
-        kubectl apply -f k8s/backend-service.yaml --validate=false
-        kubectl apply -f k8s/ingress.yaml --validate=false
+        kubectl apply -f k8s/backend-deployment.yaml
+        kubectl apply -f k8s/backend-service.yaml
+        kubectl apply -f k8s/ingress.yaml
         
         # Wait for deployment to be ready
         kubectl rollout status deployment/backend -n cicd-demo --timeout=300s
