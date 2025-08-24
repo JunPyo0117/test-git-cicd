@@ -115,7 +115,7 @@ docker-compose up -d
 # 프론트엔드 접속
 open http://localhost:3000
 
-# 백엔드 API 테스트
+# 백엔드 API 테스트2
 curl http://localhost:3001/api/messages
 ```
 
