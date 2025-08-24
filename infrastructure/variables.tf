@@ -27,3 +27,9 @@ variable "eks_node_instance_type" {
   type        = string
   default     = "t3.medium"
 }
+
+variable "github_repository" {
+  description = "GitHub repository name (format: owner/repo)"
+  type        = string
+  default     = "your-username/test-git-cicd"
+}

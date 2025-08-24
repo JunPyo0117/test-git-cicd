@@ -10,6 +10,10 @@ data:
       groups:
         - system:bootstrappers
         - system:nodes
+    - rolearn: arn:aws:iam::471303021447:role/github-actions-role
+      username: github-actions
+      groups:
+        - system:masters
   mapUsers: |
     - userarn: arn:aws:iam::471303021447:user/my_user
       username: my_user
