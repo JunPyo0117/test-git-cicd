@@ -18,12 +18,19 @@ import { MessagesModule } from './messages/messages.module';
       entities: [__dirname + '/**/*.entity{.ts,.js}'],
       synchronize: process.env.NODE_ENV !== 'production', // 개발 환경에서만 true
       logging: process.env.NODE_ENV !== 'production',
+      // SSL 설정 추가
+      ssl: {
+        rejectUnauthorized: false,
+      },
       // 연결 설정 추가
       connectTimeoutMS: 30000, // 30초
       extra: {
         connectionTimeoutMillis: 30000,
         query_timeout: 30000,
         statement_timeout: 30000,
+        ssl: {
+          rejectUnauthorized: false,
+        },
       },
       // 재시도 설정
       retryAttempts: 10,
