@@ -135,7 +135,7 @@ curl http://localhost:3001/api/messages
 curl http://localhost:3001/api/messages/health
 ```
 
-### 개별 실행
+### 개별 실행1
 ```bash
 # Frontend
 cd frontend && npm run dev
