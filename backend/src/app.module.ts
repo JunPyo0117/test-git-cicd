@@ -16,7 +16,7 @@ import { MessagesModule } from './messages/messages.module';
       password: process.env.DB_PASSWORD || 'password',
       database: process.env.DB_NAME || 'cicd_demo',
       entities: [__dirname + '/**/*.entity{.ts,.js}'],
-      synchronize: process.env.NODE_ENV !== 'production', // 개발 환경에서만 true
+      synchronize: true, // 임시로 프로덕션에서도 테이블 생성 허용
       logging: process.env.NODE_ENV !== 'production',
       // SSL 설정 추가
       ssl: {
