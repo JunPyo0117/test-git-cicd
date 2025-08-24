@@ -115,7 +115,7 @@ docker-compose up -d
 # 프론트엔드 접속
 open http://localhost:3000
 
-# 백엔드 API 테스트2
+# 백엔드 API 테스트
 curl http://localhost:3001/api/messages
 ```
 
@@ -128,3 +128,4 @@ cd frontend && npm run dev
 cd backend && npm run start:dev
 ```
 # Trigger GitHub Actions
+# EKS authentication fixed - trigger workflow
