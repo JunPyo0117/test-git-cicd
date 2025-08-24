@@ -20,6 +20,7 @@ spec:
         image: 471303021447.dkr.ecr.ap-northeast-2.amazonaws.com/cicd-demo-backend:latest
         ports:
         - containerPort: 3001
+          name: http
         env:
         - name: NODE_ENV
           value: "production"
@@ -57,13 +58,17 @@ spec:
             cpu: "500m"
         livenessProbe:
           httpGet:
-            path: /api/messages
+            path: /api/messages/health
             port: 3001
           initialDelaySeconds: 30
           periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
         readinessProbe:
           httpGet:
-            path: /api/messages
+            path: /api/messages/health
             port: 3001
-          initialDelaySeconds: 5
+          initialDelaySeconds: 10
           periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3

@@ -18,6 +18,21 @@ output "cluster_certificate_authority_data" {
   value       = module.eks.cluster_certificate_authority_data
 }
 
+output "load_balancer_controller_role_arn" {
+  description = "ARN of the Load Balancer Controller IAM role"
+  value       = aws_iam_role.aws_load_balancer_controller.arn
+}
+
+output "vpc_id" {
+  description = "VPC ID"
+  value       = module.vpc.vpc_id
+}
+
+output "alb_security_group_id" {
+  description = "Security Group ID for ALB"
+  value       = aws_security_group.alb.id
+}
+
 output "ecr_frontend_repository_url" {
   description = "URL of the frontend ECR repository"
   value       = aws_ecr_repository.frontend.repository_url
@@ -59,11 +74,6 @@ output "cloudfront_distribution_id" {
   value       = aws_cloudfront_distribution.frontend.id
 }
 
-output "vpc_id" {
-  description = "VPC ID"
-  value       = module.vpc.vpc_id
-}
-
 output "private_subnets" {
   description = "Private subnet IDs"
   value       = module.vpc.private_subnets
@@ -72,4 +82,34 @@ output "private_subnets" {
 output "public_subnets" {
   description = "Public subnet IDs"
   value       = module.vpc.public_subnets
+}
+
+output "route53_zone_id" {
+  description = "Route 53 hosted zone ID"
+  value       = var.domain_name != "" ? aws_route53_zone.main[0].zone_id : null
+}
+
+output "route53_name_servers" {
+  description = "Route 53 name servers"
+  value       = var.domain_name != "" ? aws_route53_zone.main[0].name_servers : null
+}
+
+output "acm_certificate_arn" {
+  description = "ACM certificate ARN"
+  value       = var.domain_name != "" ? aws_acm_certificate.frontend[0].arn : null
+}
+
+output "alb_dns_name" {
+  description = "ALB DNS name"
+  value       = aws_lb.backend.dns_name
+}
+
+output "alb_zone_id" {
+  description = "ALB zone ID"
+  value       = aws_lb.backend.zone_id
+}
+
+output "target_group_arn" {
+  description = "ALB target group ARN"
+  value       = aws_lb_target_group.backend.arn
 }

@@ -7,6 +7,9 @@ interface Message {
   timestamp: string
 }
 
+// 백엔드 API URL 설정
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
 function App() {
   const [messages, setMessages] = useState<Message[]>([])
   const [newMessage, setNewMessage] = useState('')
@@ -15,7 +18,7 @@ function App() {
   // 백엔드에서 메시지 가져오기
   const fetchMessages = async () => {
     try {
-      const response = await fetch('/api/messages')
+      const response = await fetch(`${API_BASE_URL}/api/messages`)
       const data = await response.json()
       setMessages(data)
     } catch (error) {
@@ -29,7 +32,7 @@ function App() {
 
     setLoading(true)
     try {
-      const response = await fetch('/api/messages', {
+      const response = await fetch(`${API_BASE_URL}/api/messages`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

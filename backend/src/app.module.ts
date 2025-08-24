@@ -16,25 +16,25 @@ import { MessagesModule } from './messages/messages.module';
       password: process.env.DB_PASSWORD || 'password',
       database: process.env.DB_NAME || 'cicd_demo',
       entities: [__dirname + '/**/*.entity{.ts,.js}'],
-      synchronize: true, // 임시로 프로덕션에서도 테이블 생성 허용
+      synchronize: process.env.NODE_ENV !== 'production', // 프로덕션에서는 false로 설정
       logging: process.env.NODE_ENV !== 'production',
-      // SSL 설정 추가
-      ssl: {
+      // SSL 설정 (AWS RDS용)
+      ssl: process.env.NODE_ENV === 'production' ? {
         rejectUnauthorized: false,
-      },
-      // 연결 설정 추가
-      connectTimeoutMS: 30000, // 30초
+      } : false,
+      // 연결 설정
+      connectTimeoutMS: 30000,
       extra: {
         connectionTimeoutMillis: 30000,
         query_timeout: 30000,
         statement_timeout: 30000,
-        ssl: {
+        ssl: process.env.NODE_ENV === 'production' ? {
           rejectUnauthorized: false,
-        },
+        } : false,
       },
       // 재시도 설정
       retryAttempts: 10,
-      retryDelay: 3000, // 3초
+      retryDelay: 3000,
     }),
     MessagesModule,
   ],

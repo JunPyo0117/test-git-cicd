@@ -9,6 +9,10 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.0"
     }
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = "~> 2.0"
+    }
   }
   
   backend "s3" {
@@ -63,6 +67,38 @@ module "eks" {
   subnet_ids = concat(module.vpc.private_subnets, module.vpc.public_subnets)
 }
 
+# aws-auth ConfigMap (EKS 클러스터 생성 후 자동 생성)
+# resource "kubernetes_config_map" "aws_auth" {
+#   metadata {
+#     name      = "aws-auth"
+#     namespace = "kube-system"
+#   }
+#
+#   data = {
+#     mapRoles = yamlencode([
+#       {
+#         rolearn  = aws_iam_role.node_group.arn
+#         username = "system:node:{{EC2PrivateDNSName}}"
+#         groups   = ["system:bootstrappers", "system:nodes"]
+#       }
+#     ])
+#     mapUsers = yamlencode([
+#       {
+#         userarn  = "arn:aws:iam::471303021447:user/my_user"
+#         username = "my_user"
+#         groups   = ["system:masters"]
+#       }
+#     ])
+#   }
+#
+#   depends_on = [module.eks]
+#   
+#   # aws-auth ConfigMap이 생성된 후 잠시 대기
+#   provisioner "local-exec" {
+#     command = "sleep 30"
+#   }
+# }
+
 # EKS Node Group
 resource "aws_eks_node_group" "main" {
   cluster_name    = module.eks.cluster_name
@@ -82,6 +118,7 @@ resource "aws_eks_node_group" "main" {
     aws_iam_role_policy_attachment.node_group_AmazonEKSWorkerNodePolicy,
     aws_iam_role_policy_attachment.node_group_AmazonEKS_CNI_Policy,
     aws_iam_role_policy_attachment.node_group_AmazonEC2ContainerRegistryReadOnly,
+    aws_iam_role_policy_attachment.node_group_AmazonEC2FullAccess,
   ]
 }
 
@@ -113,6 +150,11 @@ resource "aws_iam_role_policy_attachment" "node_group_AmazonEKS_CNI_Policy" {
 
 resource "aws_iam_role_policy_attachment" "node_group_AmazonEC2ContainerRegistryReadOnly" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+  role       = aws_iam_role.node_group.name
+}
+
+resource "aws_iam_role_policy_attachment" "node_group_AmazonEC2FullAccess" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2FullAccess"
   role       = aws_iam_role.node_group.name
 }
 
@@ -274,6 +316,9 @@ resource "aws_cloudfront_distribution" "frontend" {
     viewer_protocol_policy = "redirect-to-https"
     
     cache_policy_id = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # Managed-CachingDisabled
+    
+    # CORS 헤더 추가
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.cors.id
   }
   
   # Handle SPA routing
@@ -296,8 +341,13 @@ resource "aws_cloudfront_distribution" "frontend" {
   }
   
   viewer_certificate {
-    cloudfront_default_certificate = true
+    acm_certificate_arn      = var.domain_name != "" ? aws_acm_certificate.frontend[0].arn : null
+    ssl_support_method       = var.domain_name != "" ? "sni-only" : null
+    minimum_protocol_version = var.domain_name != "" ? "TLSv1.2_2021" : null
+    cloudfront_default_certificate = var.domain_name == "" ? true : false
   }
+  
+  aliases = var.domain_name != "" ? [var.domain_name] : null
   
   tags = {
     Name = "cicd-frontend-distribution"
@@ -343,9 +393,264 @@ resource "aws_iam_role" "aws_load_balancer_controller" {
       }
     ]
   })
+
+  tags = {
+    Name = "aws-load-balancer-controller-role"
+  }
 }
 
 resource "aws_iam_role_policy_attachment" "aws_load_balancer_controller" {
   role       = aws_iam_role.aws_load_balancer_controller.name
   policy_arn = aws_iam_policy.aws_load_balancer_controller.arn
 }
+
+# Security Group for Load Balancer
+resource "aws_security_group" "alb" {
+  name_prefix = "cicd-alb-"
+  vpc_id      = module.vpc.vpc_id
+  
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "HTTP"
+  }
+  
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "HTTPS"
+  }
+  
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  
+  tags = {
+    Name = "cicd-alb-sg"
+  }
+}
+
+# Route 53 Hosted Zone (커스텀 도메인이 있는 경우)
+resource "aws_route53_zone" "main" {
+  count = var.domain_name != "" ? 1 : 0
+  name  = var.domain_name
+  
+  tags = {
+    Name = "cicd-zone"
+  }
+}
+
+# Route 53 A Record for CloudFront
+resource "aws_route53_record" "frontend" {
+  count = var.domain_name != "" ? 1 : 0
+  
+  zone_id = aws_route53_zone.main[0].zone_id
+  name    = var.domain_name
+  type    = "A"
+  
+  alias {
+    name                   = aws_cloudfront_distribution.frontend.domain_name
+    zone_id                = aws_cloudfront_distribution.frontend.hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+# Route 53 AAAA Record for CloudFront (IPv6)
+resource "aws_route53_record" "frontend_ipv6" {
+  count = var.domain_name != "" ? 1 : 0
+  
+  zone_id = aws_route53_zone.main[0].zone_id
+  name    = var.domain_name
+  type    = "AAAA"
+  
+  alias {
+    name                   = aws_cloudfront_distribution.frontend.domain_name
+    zone_id                = aws_cloudfront_distribution.frontend.hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+# ACM Certificate for custom domain
+resource "aws_acm_certificate" "frontend" {
+  count = var.domain_name != "" ? 1 : 0
+  
+  domain_name       = var.domain_name
+  validation_method = "DNS"
+  
+  lifecycle {
+    create_before_destroy = true
+  }
+  
+  tags = {
+    Name = "cicd-frontend-cert"
+  }
+}
+
+# Certificate validation records
+resource "aws_route53_record" "cert_validation" {
+  count = var.domain_name != "" ? length(aws_acm_certificate.frontend[0].domain_validation_options) : 0
+  
+  zone_id = aws_route53_zone.main[0].zone_id
+  name    = aws_acm_certificate.frontend[0].domain_validation_options[count.index].resource_record_name
+  type    = aws_acm_certificate.frontend[0].domain_validation_options[count.index].resource_record_type
+  records = [aws_acm_certificate.frontend[0].domain_validation_options[count.index].resource_record_value]
+  ttl     = 60
+}
+
+# Certificate validation
+resource "aws_acm_certificate_validation" "frontend" {
+  count = var.domain_name != "" ? 1 : 0
+  
+  certificate_arn         = aws_acm_certificate.frontend[0].arn
+  validation_record_fqdns = aws_route53_record.cert_validation[*].fqdn
+}
+
+# Application Load Balancer for backend
+resource "aws_lb" "backend" {
+  name               = "cicd-backend-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb.id]
+  subnets            = module.vpc.public_subnets
+  
+  enable_deletion_protection = false
+  
+  tags = {
+    Name = "cicd-backend-alb"
+  }
+}
+
+# ALB Target Group
+resource "aws_lb_target_group" "backend" {
+  name     = "cicd-backend-tg"
+  port     = 3001
+  protocol = "HTTP"
+  vpc_id   = module.vpc.vpc_id
+  
+  health_check {
+    enabled             = true
+    healthy_threshold   = 2
+    interval            = 30
+    matcher             = "200"
+    path                = "/api/messages/health"
+    port                = "traffic-port"
+    protocol            = "HTTP"
+    timeout             = 5
+    unhealthy_threshold = 2
+  }
+  
+  tags = {
+    Name = "cicd-backend-tg"
+  }
+}
+
+# ALB Listener
+resource "aws_lb_listener" "backend" {
+  load_balancer_arn = aws_lb.backend.arn
+  port              = "80"
+  protocol          = "HTTP"
+  
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.backend.arn
+  }
+}
+
+# CloudFront CORS Response Headers Policy
+resource "aws_cloudfront_response_headers_policy" "cors" {
+  name = "cicd-cors-policy"
+  
+  cors_config {
+    access_control_allow_credentials = false
+    
+    access_control_allow_headers {
+      items = ["*"]
+    }
+    
+    access_control_allow_methods {
+      items = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+    }
+    
+    access_control_allow_origins {
+      items = ["*"]
+    }
+    
+    access_control_expose_headers {
+      items = ["*"]
+    }
+    
+    access_control_max_age_sec = 600
+    
+    origin_override = true
+  }
+  
+  security_headers_config {
+    content_type_options {
+      override = true
+    }
+    
+    frame_options {
+      frame_option = "SAMEORIGIN"
+      override     = true
+    }
+    
+    referrer_policy {
+      referrer_policy = "strict-origin-when-cross-origin"
+      override        = true
+    }
+    
+    xss_protection {
+      mode_block = true
+      protection = true
+      override   = true
+    }
+  }
+}
+
+# Kubernetes Provider 설정
+# provider "kubernetes" {
+#   host                   = module.eks.cluster_endpoint
+#   cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
+#   
+#   exec {
+#     api_version = "client.authentication.k8s.io/v1beta1"
+#     command     = "aws"
+#     args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name]
+#   }
+# }
+
+# Kubernetes Namespace
+# resource "kubernetes_namespace" "cicd_demo" {
+#   metadata {
+#     name = "cicd-demo"
+#   }
+#   
+#   depends_on = [kubernetes_config_map.aws_auth]
+# }
+
+# Database Secret
+# resource "kubernetes_secret" "db_secret" {
+#   metadata {
+#     name      = "db-secret"
+#     namespace = kubernetes_namespace.cicd_demo.metadata[0].name
+#   }
+#
+#   data = {
+#     host     = aws_db_instance.main.endpoint
+#     port     = "5432"
+#     username = aws_db_instance.main.username
+#     password = random_password.db_password.result
+#     database = aws_db_instance.main.db_name
+#   }
+#
+#   type = "Opaque"
+#   
+#   depends_on = [kubernetes_namespace.cicd_demo]
+# }

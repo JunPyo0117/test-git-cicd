@@ -30,8 +30,7 @@
 │   ├── backend-service.yaml     # 백엔드 서비스
 │   ├── ingress.yaml         # ALB Ingress
 │   └── aws-load-balancer-controller-sa.yaml  # Load Balancer Controller ServiceAccount
-├── scripts/                 # 설치 스크립트
-│   └── install-load-balancer-controller.sh  # Load Balancer Controller 설치
+├── scripts/                 # 설치 스크립트 (로컬 개발용)
 ├── .github/
 │   └── workflows/           # GitHub Actions 워크플로우
 ├── docker-compose.yml       # 로컬 개발용 Docker Compose
@@ -46,7 +45,6 @@
 - Node.js 18+
 - kubectl 설치
 - Terraform 설치
-- Helm 설치 (Load Balancer Controller용)
 
 ### 환경 변수 설정
 ```bash
@@ -63,15 +61,27 @@ export AWS_DEFAULT_REGION=ap-northeast-2
 # EKS_CLUSTER_NAME
 # S3_BUCKET_NAME
 # CLOUDFRONT_DISTRIBUTION_ID
+# API_URL (백엔드 API URL)
 ```
 
 ### 배포 순서
 1. AWS 인프라 배포 (Terraform)
-2. EKS 클러스터 연결
-3. Load Balancer Controller 설치
-4. Kubernetes 리소스 배포
-5. GitHub Secrets 설정
-6. 코드 푸시하여 CI/CD 파이프라인 실행
+2. GitHub Secrets 설정
+3. 코드 푸시하여 CI/CD 파이프라인 실행
+   - 네임스페이스 자동 생성
+   - Load Balancer Controller 자동 설치
+   - Kubernetes 리소스 자동 배포
+   - Docker 이미지 빌드 및 ECR 푸시
+   - EKS 자동 배포
+
+### GitHub Actions 워크플로우
+- **테스트**: 프론트엔드와 백엔드 의존성 설치 및 테스트
+- **빌드 및 푸시**: Docker 이미지 빌드 및 ECR 푸시
+- **백엔드 배포**: 
+  - 네임스페이스 생성
+  - Load Balancer Controller 설치
+  - Kubernetes 리소스 배포
+- **프론트엔드 배포**: S3 업로드 및 CloudFront 무효화
 
 ## 기술 스택
 
@@ -105,6 +115,11 @@ export AWS_DEFAULT_REGION=ap-northeast-2
 - Ingress를 통한 라우팅 규칙 관리
 - 자동 스케일링 지원
 
+### Health Check
+- Kubernetes Liveness/Readiness Probe
+- Docker Health Check
+- ALB Health Check
+
 ## 로컬 개발
 
 ### 로컬 환경 실행
@@ -117,6 +132,7 @@ open http://localhost:3000
 
 # 백엔드 API 테스트
 curl http://localhost:3001/api/messages
+curl http://localhost:3001/api/messages/health
 ```
 
 ### 개별 실행
@@ -127,5 +143,27 @@ cd frontend && npm run dev
 # Backend
 cd backend && npm run start:dev
 ```
-# Trigger GitHub Actions
-# EKS authentication fixed - trigger workflowd
+
+## 최근 수정사항
+
+### 버그 수정
+- ✅ Health check 엔드포인트 추가 (`/api/messages/health`)
+- ✅ Kubernetes 포트 설정 수정 (3001 포트 일치)
+- ✅ Ingress 설정 개선
+- ✅ 네임스페이스 자동 생성
+- ✅ ALB Target Group 포트 수정
+- ✅ Docker health check 스크립트 개선
+- ✅ 데이터베이스 SSL 설정 개선
+
+### 보안 개선
+- ✅ 프로덕션 환경에서 synchronize 비활성화
+- ✅ 환경별 SSL 설정 분리
+- ✅ 적절한 리소스 제한 설정
+
+## 트러블슈팅
+
+### 일반적인 문제
+1. **Health Check 실패**: `/api/messages/health` 엔드포인트 확인
+2. **포트 불일치**: 백엔드는 3001 포트에서 실행
+3. **네임스페이스 문제**: `cicd-demo` 네임스페이스가 자동 생성됨
+4. **데이터베이스 연결**: RDS SSL 설정 확인

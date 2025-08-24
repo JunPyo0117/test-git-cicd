@@ -12,7 +12,15 @@ export class MessagesController {
   }
 
   @Post()
-  async create(@Body() body: { text: string }): Promise<Message> {
-    return this.messagesService.create(body.text);
+  async create(@Body() createMessageDto: { text: string }): Promise<Message> {
+    return this.messagesService.create(createMessageDto.text);
+  }
+
+  @Get('health')
+  async healthCheck(): Promise<{ status: string; timestamp: string }> {
+    return {
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+    };
   }
 }
