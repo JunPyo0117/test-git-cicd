@@ -362,7 +362,31 @@ jobs:
         
         # Ingress 상태 확인 및 ALB DNS 출력
         echo "Waiting for Ingress to be ready..."
-        kubectl wait --for=condition=ready ingress/cicd-ingress -n cicd-demo --timeout=300s
+        echo "Checking Ingress status every 10 seconds for up to 10 minutes..."
+        
+        # 최대 10분까지 대기 (10초마다 체크)
+        for i in {1..60}; do
+          echo "Attempt $i/60: Checking Ingress status..."
+          
+          # Ingress 상태 확인
+          INGRESS_STATUS=$(kubectl get ingress cicd-ingress -n cicd-demo -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
+          
+          if [ -n "$INGRESS_STATUS" ]; then
+            echo "✅ Ingress is ready! ALB DNS: $INGRESS_STATUS"
+            break
+          fi
+          
+          if [ $i -eq 60 ]; then
+            echo "❌ Ingress failed to become ready after 10 minutes"
+            echo "=== Debug Information ==="
+            kubectl describe ingress cicd-ingress -n cicd-demo
+            kubectl get events -n cicd-demo --sort-by='.lastTimestamp'
+            exit 1
+          fi
+          
+          echo "⏳ Ingress not ready yet, waiting 10 seconds..."
+          sleep 10
+        done
         
         # ALB DNS 이름 출력
         ALB_DNS=$(kubectl get ingress cicd-ingress -n cicd-demo -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
