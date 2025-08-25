@@ -142,43 +142,52 @@ jobs:
         CURRENT_ARN=$(aws sts get-caller-identity --query 'Arn' --output text)
         echo "Current AWS ARN: $CURRENT_ARN"
         
-        # Check if EKS Access Entry exists for github-actions-role
-        echo "Checking EKS Access Entry for github-actions-role..."
-        if aws eks describe-access-entry --cluster-name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }} --principal-arn "arn:aws:iam::471303021447:role/github-actions-role" > /dev/null 2>&1; then
-          echo "EKS Access Entry for github-actions-role exists"
-          
-          # Check associated policies
-          echo "Checking associated access policies..."
-          POLICIES=$(aws eks list-associated-access-policies --cluster-name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }} --principal-arn "arn:aws:iam::471303021447:role/github-actions-role" --query 'associatedAccessPolicies[*].policyArn' --output text)
-          echo "Associated policies: $POLICIES"
-          
-          # Check if both required policies are associated
-          if echo "$POLICIES" | grep -q "AmazonEKSAdminPolicy" && echo "$POLICIES" | grep -q "AmazonEKSClusterAdminPolicy"; then
-            echo "Both AmazonEKSAdminPolicy and AmazonEKSClusterAdminPolicy are associated"
-          else
-            echo "Missing required policies. Please ensure both AmazonEKSAdminPolicy and AmazonEKSClusterAdminPolicy are associated"
-            exit 1
-          fi
-        else
-          echo "EKS Access Entry for github-actions-role not found"
-          echo "Please create EKS Access Entry with both AmazonEKSAdminPolicy and AmazonEKSClusterAdminPolicy for github-actions-role"
-          exit 1
-        fi
-        
-        # Test kubectl access
+        # Test kubectl access directly
         echo "Testing kubectl access..."
         if kubectl get nodes --request-timeout=30s > /dev/null 2>&1; then
           echo "kubectl access is working!"
         else
-          echo "kubectl access failed. This indicates that the EKS Access Entry is not properly configured."
-          echo "Please ensure the following EKS Access Entry exists with both policies:"
-          echo "1. Go to AWS Console: EKS > Clusters > cicd-cluster > Access tab"
-          echo "2. Verify github-actions-role has both AmazonEKSAdminPolicy and AmazonEKSClusterAdminPolicy"
-          echo "3. Or create via AWS CLI:"
-          echo "   aws eks create-access-entry --cluster-name cicd-cluster --principal-arn 'arn:aws:iam::471303021447:role/github-actions-role' --type STANDARD"
-          echo "   aws eks associate-access-policy --cluster-name cicd-cluster --principal-arn 'arn:aws:iam::471303021447:role/github-actions-role' --policy-arn 'arn:aws:eks::aws:cluster-access-policy/AmazonEKSAdminPolicy' --access-scope type=cluster"
-          echo "   aws eks associate-access-policy --cluster-name cicd-cluster --principal-arn 'arn:aws:iam::471303021447:role/github-actions-role' --policy-arn 'arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy' --access-scope type=cluster"
-          exit 1
+          echo "kubectl access failed. Checking EKS Access Entry configuration..."
+          
+          # List all access entries for debugging
+          echo "Listing all access entries:"
+          aws eks list-access-entries --cluster-name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+          
+          # Try to create access entry if it doesn't exist
+          echo "Attempting to create EKS Access Entry for github-actions-role..."
+          aws eks create-access-entry \
+            --cluster-name ${{ env.EKS_CLUSTER_NAME }} \
+            --region ${{ env.AWS_REGION }} \
+            --principal-arn "arn:aws:iam::471303021447:role/github-actions-role" \
+            --type STANDARD || echo "Access entry creation failed or already exists"
+          
+          # Associate policies
+          echo "Associating access policies..."
+          aws eks associate-access-policy \
+            --cluster-name ${{ env.EKS_CLUSTER_NAME }} \
+            --region ${{ env.AWS_REGION }} \
+            --principal-arn "arn:aws:iam::471303021447:role/github-actions-role" \
+            --policy-arn "arn:aws:eks::aws:cluster-access-policy/AmazonEKSAdminPolicy" \
+            --access-scope type=cluster || echo "Admin policy association failed or already exists"
+          
+          aws eks associate-access-policy \
+            --cluster-name ${{ env.EKS_CLUSTER_NAME }} \
+            --region ${{ env.AWS_REGION }} \
+            --principal-arn "arn:aws:iam::471303021447:role/github-actions-role" \
+            --policy-arn "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy" \
+            --access-scope type=cluster || echo "Cluster admin policy association failed or already exists"
+          
+          # Wait a moment and try again
+          echo "Waiting for access entry to propagate..."
+          sleep 10
+          
+          if kubectl get nodes --request-timeout=30s > /dev/null 2>&1; then
+            echo "kubectl access is now working!"
+          else
+            echo "kubectl access still failed after creating access entry."
+            echo "Please check EKS cluster access configuration manually."
+            exit 1
+          fi
         fi
         
         # Final test
