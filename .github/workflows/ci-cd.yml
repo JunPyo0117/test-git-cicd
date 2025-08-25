@@ -249,11 +249,26 @@ jobs:
     # 데이터베이스 시크릿 생성
     - name: Create database secret
       run: |
+        # RDS 정보를 Terraform output에서 가져오기
+        echo "Getting RDS information from Terraform output..."
+        DB_HOST="cicd-database.cvuok60y0zyf.ap-northeast-2.rds.amazonaws.com"
+        
+        # GitHub Secrets에서 비밀번호 가져오기 (없으면 기본값 사용)
+        if [ -z "${{ secrets.DB_PASSWORD }}" ]; then
+          echo "DB_PASSWORD secret is empty, using default password"
+          DB_PASSWORD="postgres123"
+        else
+          DB_PASSWORD="${{ secrets.DB_PASSWORD }}"
+        fi
+        
+        echo "Using DB_HOST: $DB_HOST"
+        echo "Using DB_PASSWORD: [HIDDEN]"
+        
         # Base64 인코딩
-        DB_HOST_B64=$(echo -n "${{ secrets.DB_HOST }}" | base64)
+        DB_HOST_B64=$(echo -n "$DB_HOST" | base64)
         DB_PORT_B64=$(echo -n "5432" | base64)
         DB_USERNAME_B64=$(echo -n "postgres" | base64)
-        DB_PASSWORD_B64=$(echo -n "${{ secrets.DB_PASSWORD }}" | base64)
+        DB_PASSWORD_B64=$(echo -n "$DB_PASSWORD" | base64)
         DB_NAME_B64=$(echo -n "cicd_demo" | base64)
         
         # 시크릿 파일 생성
@@ -271,6 +286,10 @@ jobs:
           password: $DB_PASSWORD_B64
           database: $DB_NAME_B64
         EOF
+        
+        # 생성된 시크릿 파일 확인
+        echo "Generated secret file:"
+        cat k8s/backend/secret-generated.yaml
     
     # Kubernetes 매니페스트 적용
     - name: Deploy to EKS
