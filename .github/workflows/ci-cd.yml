@@ -81,47 +81,10 @@ jobs:
         docker tag frontend:latest ${{ steps.login-ecr.outputs.registry }}/cicd-demo-frontend:latest
         docker push ${{ steps.login-ecr.outputs.registry }}/cicd-demo-frontend:latest
     
-    # EKS 설정 및 Access Entry 확인
+    # EKS 설정 및 Access Entries 적용
     - name: Configure EKS access
       run: |
-        # EKS 클러스터 정보 가져오기
-        CLUSTER_ENDPOINT=$(aws eks describe-cluster --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }} --query 'cluster.endpoint' --output text)
-        CLUSTER_CA_DATA=$(aws eks describe-cluster --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }} --query 'cluster.certificateAuthority.data' --output text)
-        
-        echo "Cluster Endpoint: $CLUSTER_ENDPOINT"
-        echo "Cluster CA Data: $CLUSTER_CA_DATA"
-        
-        # kubeconfig 파일 수동 생성
-        mkdir -p ~/.kube
-        cat > ~/.kube/config << EOF
-        apiVersion: v1
-        kind: Config
-        clusters:
-        - name: ${{ env.EKS_CLUSTER_NAME }}
-          cluster:
-            server: $CLUSTER_ENDPOINT
-            certificate-authority-data: $CLUSTER_CA_DATA
-        contexts:
-        - name: ${{ env.EKS_CLUSTER_NAME }}
-          context:
-            cluster: ${{ env.EKS_CLUSTER_NAME }}
-            user: aws
-        current-context: ${{ env.EKS_CLUSTER_NAME }}
-        users:
-        - name: aws
-          user:
-            exec:
-              apiVersion: client.authentication.k8s.io/v1beta1
-              command: aws
-              args:
-                - eks
-                - get-token
-                - --cluster-name
-                - ${{ env.EKS_CLUSTER_NAME }}
-                - --region
-                - ${{ env.AWS_REGION }}
-        EOF
-        
+        aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
         aws sts get-caller-identity
         
         # Check if EKS cluster is accessible via AWS CLI
@@ -133,64 +96,22 @@ jobs:
           exit 1
         fi
         
-        # Check current EKS cluster authentication mode
-        echo "Checking current EKS cluster authentication mode..."
-        AUTH_MODE=$(aws eks describe-cluster --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }} --query 'cluster.accessConfig.authenticationMode' --output text)
-        echo "Current authentication mode: $AUTH_MODE"
-        
         # Get current AWS identity
         CURRENT_ARN=$(aws sts get-caller-identity --query 'Arn' --output text)
         echo "Current AWS ARN: $CURRENT_ARN"
         
-        # Test kubectl access directly
-        echo "Testing kubectl access..."
-        if kubectl get nodes --request-timeout=30s > /dev/null 2>&1; then
-          echo "kubectl access is working!"
-        else
-          echo "kubectl access failed. Checking EKS Access Entry configuration..."
-          
-          # List all access entries for debugging
-          echo "Listing all access entries:"
-          aws eks list-access-entries --cluster-name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
-          
-          # Try to create access entry if it doesn't exist
-          echo "Attempting to create EKS Access Entry for github-actions-role..."
-          aws eks create-access-entry \
-            --cluster-name ${{ env.EKS_CLUSTER_NAME }} \
-            --region ${{ env.AWS_REGION }} \
-            --principal-arn "arn:aws:iam::471303021447:role/github-actions-role" \
-            --type STANDARD || echo "Access entry creation failed or already exists"
-          
-          # Associate policies
-          echo "Associating access policies..."
-          aws eks associate-access-policy \
-            --cluster-name ${{ env.EKS_CLUSTER_NAME }} \
-            --region ${{ env.AWS_REGION }} \
-            --principal-arn "arn:aws:iam::471303021447:role/github-actions-role" \
-            --policy-arn "arn:aws:eks::aws:cluster-access-policy/AmazonEKSAdminPolicy" \
-            --access-scope type=cluster || echo "Admin policy association failed or already exists"
-          
-          aws eks associate-access-policy \
-            --cluster-name ${{ env.EKS_CLUSTER_NAME }} \
-            --region ${{ env.AWS_REGION }} \
-            --principal-arn "arn:aws:iam::471303021447:role/github-actions-role" \
-            --policy-arn "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy" \
-            --access-scope type=cluster || echo "Cluster admin policy association failed or already exists"
-          
-          # Wait a moment and try again
-          echo "Waiting for access entry to propagate..."
-          sleep 10
-          
-          if kubectl get nodes --request-timeout=30s > /dev/null 2>&1; then
-            echo "kubectl access is now working!"
-          else
-            echo "kubectl access still failed after creating access entry."
-            echo "Please check EKS cluster access configuration manually."
-            exit 1
-          fi
-        fi
+        # Create EKS Access Entry for GitHub Actions role
+        echo "Creating EKS Access Entry for GitHub Actions role..."
+        aws eks create-access-entry \
+          --cluster-name ${{ env.EKS_CLUSTER_NAME }} \
+          --region ${{ env.AWS_REGION }} \
+          --principal-arn "arn:aws:iam::471303021447:role/github-actions-role" \
+          --type Standard \
+          --kubernetes-groups system:masters || {
+          echo "Access entry creation failed or already exists"
+        }
         
-        # Final test
+        # Test kubectl access
         kubectl get nodes
     
     # AWS Load Balancer Controller ServiceAccount 생성
