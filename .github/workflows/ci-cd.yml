@@ -249,11 +249,18 @@ jobs:
     # 데이터베이스 시크릿 생성
     - name: Create database secret
       run: |
-        # RDS 정보를 Terraform output에서 가져오기
-        echo "Getting RDS information from Terraform output..."
-        DB_HOST="cicd-database.cvuok60y0zyf.ap-northeast-2.rds.amazonaws.com"
+        # RDS 정보를 GitHub Secrets에서 가져오기
+        echo "Getting RDS information from GitHub Secrets..."
         
-        # GitHub Secrets에서 비밀번호 가져오기 (없으면 기본값 사용)
+        # DB_HOST 처리
+        if [ -z "${{ secrets.DB_HOST }}" ]; then
+          echo "DB_HOST secret is empty, using default RDS endpoint"
+          DB_HOST="cicd-database.cvuok60y0zyf.ap-northeast-2.rds.amazonaws.com"
+        else
+          DB_HOST="${{ secrets.DB_HOST }}"
+        fi
+        
+        # DB_PASSWORD 처리
         if [ -z "${{ secrets.DB_PASSWORD }}" ]; then
           echo "DB_PASSWORD secret is empty, using default password"
           DB_PASSWORD="postgres123"
