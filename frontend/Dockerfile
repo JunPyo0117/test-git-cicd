@@ -24,8 +24,18 @@ RUN npm install -g serve
 # Copy built app
 COPY --from=build /app/dist /app
 
-# Expose port
-EXPOSE 80
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nextjs -u 1001
 
-# Start server (no proxy, just static files)
-CMD ["serve", "-s", "/app", "-l", "80"]
+# Change ownership
+RUN chown -R nextjs:nodejs /app
+
+# Switch to non-root user
+USER nextjs
+
+# Expose port
+EXPOSE 3000
+
+# Start server on non-privileged port
+CMD ["serve", "-s", "/app", "-l", "3000"]
