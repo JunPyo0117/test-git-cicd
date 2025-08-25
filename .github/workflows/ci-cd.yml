@@ -117,14 +117,24 @@ jobs:
         }
         EOF
         
-        # Try to create access entry
+        # Try to create access entry for github-actions-role
         aws eks create-access-entry \
           --cluster-name ${{ env.EKS_CLUSTER_NAME }} \
           --region ${{ env.AWS_REGION }} \
           --principal-arn "arn:aws:iam::471303021447:role/github-actions-role" \
           --type Standard \
           --kubernetes-groups system:masters || {
-          echo "Access entry might already exist or failed to create"
+          echo "github-actions-role access entry might already exist or failed to create"
+        }
+        
+        # Try to create access entry for my_user
+        aws eks create-access-entry \
+          --cluster-name ${{ env.EKS_CLUSTER_NAME }} \
+          --region ${{ env.AWS_REGION }} \
+          --principal-arn "arn:aws:iam::471303021447:user/my_user" \
+          --type Standard \
+          --kubernetes-groups system:masters || {
+          echo "my_user access entry might already exist or failed to create"
         }
         
         # Check if we can access the cluster via kubectl
