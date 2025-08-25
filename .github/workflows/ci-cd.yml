@@ -73,7 +73,8 @@ jobs:
     - name: Build and push Frontend image
       working-directory: ./frontend
       env:
-        VITE_API_URL: ${{ secrets.API_URL }}
+        # 상대 경로를 사용하여 같은 도메인의 /api로 요청
+        VITE_API_URL: "/api"
       run: |
         npm ci
         npm run build
@@ -157,7 +158,6 @@ jobs:
       run: |
         echo "ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}" >> $GITHUB_ENV
         echo "IMAGE_TAG=latest" >> $GITHUB_ENV
-        echo "API_URL=${{ secrets.API_URL }}" >> $GITHUB_ENV
         
         # DOMAIN_NAME 처리 (비어있으면 ALB DNS만 사용)
         DOMAIN_NAME="${{ secrets.DOMAIN_NAME }}"
@@ -165,9 +165,12 @@ jobs:
           echo "DOMAIN_NAME is empty, will use ALB DNS only"
           echo "USE_DOMAIN=false" >> $GITHUB_ENV
           echo "DOMAIN_NAME=" >> $GITHUB_ENV
+          # 상대 경로를 사용하므로 API_URL은 /api로 설정
+          echo "API_URL=/api" >> $GITHUB_ENV
         else
           echo "DOMAIN_NAME=$DOMAIN_NAME" >> $GITHUB_ENV
           echo "USE_DOMAIN=true" >> $GITHUB_ENV
+          echo "API_URL=/api" >> $GITHUB_ENV
         fi
         
         # Terraform output에서 서브넷 ID와 보안 그룹 ID 가져오기
@@ -292,8 +295,35 @@ jobs:
         echo "Waiting for backend deployment to be ready..."
         kubectl rollout status deployment/backend -n cicd-demo --timeout=300s
         
+        echo "Checking backend pods status..."
+        kubectl get pods -n cicd-demo -l app=backend
+        
         echo "Waiting for frontend deployment to be ready..."
-        kubectl rollout status deployment/frontend -n cicd-demo --timeout=300s
+        if ! kubectl rollout status deployment/frontend -n cicd-demo --timeout=300s; then
+          echo "Frontend deployment failed! Debugging..."
+          
+          echo "=== Frontend Deployment Status ==="
+          kubectl describe deployment frontend -n cicd-demo
+          
+          echo "=== Frontend Pod Status ==="
+          kubectl get pods -n cicd-demo -l app=frontend
+          
+          echo "=== Frontend Pod Events ==="
+          kubectl get events -n cicd-demo --field-selector involvedObject.kind=Pod --sort-by='.lastTimestamp'
+          
+          echo "=== Frontend Pod Logs ==="
+          for pod in $(kubectl get pods -n cicd-demo -l app=frontend -o jsonpath='{.items[*].metadata.name}'); do
+            echo "--- Pod: $pod ---"
+            kubectl logs $pod -n cicd-demo --tail=50 || echo "No logs available for $pod"
+            echo "--- Pod Description: $pod ---"
+            kubectl describe pod $pod -n cicd-demo
+          done
+          
+          echo "=== ECR Image Check ==="
+          echo "Frontend image: ${ECR_REGISTRY}/cicd-demo-frontend:${IMAGE_TAG}"
+          
+          exit 1
+        fi
         
         # Ingress 상태 확인 및 ALB DNS 출력
         echo "Waiting for Ingress to be ready..."
@@ -302,6 +332,9 @@ jobs:
         # ALB DNS 이름 출력
         ALB_DNS=$(kubectl get ingress cicd-ingress -n cicd-demo -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
         echo "ALB DNS Name: $ALB_DNS"
+        
+        # 프론트엔드는 상대 경로 (/api)를 사용하므로 재배포 불필요
+        echo "Frontend uses relative API path (/api), no redeployment needed"
         
         if [ "$USE_DOMAIN" = "true" ]; then
           echo "Frontend URL: https://$DOMAIN_NAME"
