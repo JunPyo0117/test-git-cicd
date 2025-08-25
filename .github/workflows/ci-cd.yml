@@ -96,45 +96,83 @@ jobs:
           exit 1
         fi
         
-        # Check current aws-auth ConfigMap
-        echo "Checking current aws-auth ConfigMap..."
-        kubectl get configmap aws-auth -n kube-system --ignore-not-found=true
+        # Check current EKS cluster IAM access
+        echo "Checking current EKS cluster IAM access..."
+        AUTH_MODE=$(aws eks describe-cluster --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }} --query 'cluster.accessConfig.authenticationMode' --output text)
+        echo "Current authentication mode: $AUTH_MODE"
         
-        # Try to test kubectl access first
+        # Get current AWS identity
+        CURRENT_ARN=$(aws sts get-caller-identity --query 'Arn' --output text)
+        echo "Current AWS ARN: $CURRENT_ARN"
+        
+        # Try to add github-actions-role to EKS cluster access if not already present
+        echo "Attempting to add github-actions-role to EKS cluster access..."
+        
+        # Create a temporary access entry configuration
+        cat > access-entry.json << EOF
+        {
+          "principalArn": "arn:aws:iam::471303021447:role/github-actions-role",
+          "type": "Standard",
+          "kubernetesGroups": ["system:masters"]
+        }
+        EOF
+        
+        # Try to create access entry
+        aws eks create-access-entry \
+          --cluster-name ${{ env.EKS_CLUSTER_NAME }} \
+          --region ${{ env.AWS_REGION }} \
+          --principal-arn "arn:aws:iam::471303021447:role/github-actions-role" \
+          --type Standard \
+          --kubernetes-groups system:masters || {
+          echo "Access entry might already exist or failed to create"
+        }
+        
+        # Check if we can access the cluster via kubectl
         echo "Testing kubectl access..."
         if kubectl get nodes --request-timeout=30s > /dev/null 2>&1; then
-          echo "kubectl access is working, applying aws-auth ConfigMap..."
-          kubectl apply -f k8s/aws-auth-configmap.yaml
+          echo "kubectl access is working!"
         else
-          echo "kubectl access failed, trying to apply aws-auth ConfigMap anyway..."
-          # Try to apply aws-auth ConfigMap using kubectl with server-side apply
-          kubectl apply -f k8s/aws-auth-configmap.yaml --server-side --force-conflicts --validate=false || {
-            echo "Failed to apply aws-auth ConfigMap, trying alternative approach..."
-            # Alternative: Use kubectl with dry-run first
-            kubectl apply -f k8s/aws-auth-configmap.yaml --dry-run=client --validate=false
-            echo "Dry-run successful, now applying..."
-            kubectl apply -f k8s/aws-auth-configmap.yaml --validate=false
-          }
+          echo "kubectl access failed. This indicates that the current IAM role is not in the EKS cluster's access list."
+          echo "Please add the following IAM role to your EKS cluster's access configuration:"
+          echo "Role ARN: arn:aws:iam::471303021447:role/github-actions-role"
+          echo "Username: github-actions"
+          echo "Groups: system:masters"
+          echo ""
+          echo "You can do this via:"
+          echo "1. AWS Console: EKS > Clusters > cicd-cluster > Access tab"
+          echo "2. Or via AWS CLI: aws eks update-cluster-config"
+          echo ""
+          echo "For now, we'll try to continue with the deployment..."
         fi
         
-        # Wait for aws-auth ConfigMap to take effect and retry kubectl commands
-        echo "Waiting for aws-auth ConfigMap to take effect..."
+        # Wait for access entry to take effect
+        echo "Waiting for access entry to take effect..."
+        sleep 30
+        
+        # Try to apply aws-auth ConfigMap
+        echo "Applying aws-auth ConfigMap..."
+        kubectl apply -f k8s/aws-auth-configmap.yaml --validate=false || {
+          echo "Failed to apply aws-auth ConfigMap, but continuing..."
+        }
+        
+        # Wait for kubectl access to become available
+        echo "Waiting for kubectl access to become available..."
         for i in {1..15}; do
           if kubectl get nodes --request-timeout=30s > /dev/null 2>&1; then
             echo "Successfully connected to EKS cluster"
             break
           else
-            echo "Attempt $i: Waiting for authentication to be ready..."
+            echo "Attempt $i: kubectl access not available yet..."
             if [ $i -eq 15 ]; then
-              echo "Failed to connect to EKS cluster after 15 attempts"
-              echo "Current AWS identity:"
-              aws sts get-caller-identity
-              echo "Current kubeconfig context:"
-              kubectl config current-context
-              echo "Available contexts:"
-              kubectl config get-contexts
-              echo "Trying to get cluster info using AWS CLI..."
-              aws eks describe-cluster --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+              echo "kubectl access is still not available after 15 attempts"
+              echo "This is likely because the github-actions-role is not in the EKS cluster's access list"
+              echo "Please manually add the role to your EKS cluster access configuration:"
+              echo "1. Go to AWS Console: EKS > Clusters > cicd-cluster > Access tab"
+              echo "2. Click 'Create access item'"
+              echo "3. Add: arn:aws:iam::471303021447:role/github-actions-role"
+              echo "4. Set username: github-actions"
+              echo "5. Set groups: system:masters"
+              echo "6. Set access policy: AmazonEKSAdminPolicy"
               exit 1
             fi
             sleep 30
