@@ -30,29 +30,29 @@ spec:
           value: "3001"
         - name: DB_HOST
           valueFrom:
-            secretKeyRef:
-              name: db-secret
-              key: host
+            configMapKeyRef:
+              name: app-config
+              key: DB_HOST
         - name: DB_PORT
           valueFrom:
-            secretKeyRef:
-              name: db-secret
-              key: port
+            configMapKeyRef:
+              name: app-config
+              key: DB_PORT
         - name: DB_USERNAME
           valueFrom:
-            secretKeyRef:
-              name: db-secret
-              key: username
+            configMapKeyRef:
+              name: app-config
+              key: DB_USERNAME
         - name: DB_PASSWORD
           valueFrom:
-            secretKeyRef:
-              name: db-secret
-              key: password
+            configMapKeyRef:
+              name: app-config
+              key: DB_PASSWORD
         - name: DB_NAME
           valueFrom:
-            secretKeyRef:
-              name: db-secret
-              key: database
+            configMapKeyRef:
+              name: app-config
+              key: DB_NAME
         resources:
           requests:
             memory: "256Mi"

@@ -246,57 +246,13 @@ jobs:
         echo "PUBLIC_SUBNET_IDS=$PUBLIC_SUBNET_IDS" >> $GITHUB_ENV
         echo "ALB_SECURITY_GROUP_ID=$ALB_SECURITY_GROUP_ID" >> $GITHUB_ENV
     
-    # 데이터베이스 시크릿 생성
-    - name: Create database secret
+    # 데이터베이스 설정은 ConfigMap에서 관리
+    - name: Database configuration info
       run: |
-        # RDS 정보를 GitHub Secrets에서 가져오기
-        echo "Getting RDS information from GitHub Secrets..."
-        
-        # DB_HOST 처리
-        if [ -z "${{ secrets.DB_HOST }}" ]; then
-          echo "DB_HOST secret is empty, using default RDS endpoint"
-          DB_HOST="cicd-database.cvuok60y0zyf.ap-northeast-2.rds.amazonaws.com"
-        else
-          DB_HOST="${{ secrets.DB_HOST }}"
-        fi
-        
-        # DB_PASSWORD 처리
-        if [ -z "${{ secrets.DB_PASSWORD }}" ]; then
-          echo "DB_PASSWORD secret is empty, using default password"
-          DB_PASSWORD="postgres123"
-        else
-          DB_PASSWORD="${{ secrets.DB_PASSWORD }}"
-        fi
-        
-        echo "Using DB_HOST: $DB_HOST"
-        echo "Using DB_PASSWORD: [HIDDEN]"
-        
-        # Base64 인코딩
-        DB_HOST_B64=$(echo -n "$DB_HOST" | base64)
-        DB_PORT_B64=$(echo -n "5432" | base64)
-        DB_USERNAME_B64=$(echo -n "postgres" | base64)
-        DB_PASSWORD_B64=$(echo -n "$DB_PASSWORD" | base64)
-        DB_NAME_B64=$(echo -n "cicd_demo" | base64)
-        
-        # 시크릿 파일 생성
-        cat > k8s/backend/secret-generated.yaml << EOF
-        apiVersion: v1
-        kind: Secret
-        metadata:
-          name: db-secret
-          namespace: cicd-demo
-        type: Opaque
-        data:
-          host: $DB_HOST_B64
-          port: $DB_PORT_B64
-          username: $DB_USERNAME_B64
-          password: $DB_PASSWORD_B64
-          database: $DB_NAME_B64
-        EOF
-        
-        # 생성된 시크릿 파일 확인
-        echo "Generated secret file:"
-        cat k8s/backend/secret-generated.yaml
+        echo "Database configuration is managed in ConfigMap"
+        echo "DB_HOST: cicd-database.cvuok60y0zyf.ap-northeast-2.rds.amazonaws.com"
+        echo "DB_NAME: cicd_demo"
+        echo "DB_USERNAME: postgres"
     
     # Kubernetes 매니페스트 적용
     - name: Deploy to EKS
@@ -314,8 +270,7 @@ jobs:
         echo "Applying ConfigMap..."
         kubectl apply -f k8s/configmap-generated.yaml
         
-        echo "Creating database secret..."
-        kubectl apply -f k8s/backend/secret-generated.yaml
+        echo "Database configuration is now in ConfigMap..."
         
         echo "Deploying backend..."
         kubectl apply -f k8s/backend/deployment-generated.yaml
