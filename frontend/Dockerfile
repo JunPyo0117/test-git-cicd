@@ -15,17 +15,17 @@ COPY . .
 # Build the app
 RUN npm run build
 
-# Production stage - use nginx with minimal config
-FROM nginx:alpine
+# Production stage - ultra simple static server
+FROM node:18-alpine
 
-# Copy built app to nginx
-COPY --from=build /app/dist /usr/share/nginx/html
+# Install serve (better than http-server)
+RUN npm install -g serve
 
-# Create minimal nginx config to avoid permission issues
-RUN echo 'server { listen 80; root /usr/share/nginx/html; index index.html; location / { try_files $uri $uri/ /index.html; } location /api/ { proxy_pass http://backend-service:80/api/; } }' > /etc/nginx/conf.d/default.conf
+# Copy built app
+COPY --from=build /app/dist /app
 
 # Expose port
 EXPOSE 80
 
-# Start nginx
-CMD ["nginx", "-g", "daemon off;"]
+# Start server (no proxy, just static files)
+CMD ["serve", "-s", "/app", "-l", "80"]
