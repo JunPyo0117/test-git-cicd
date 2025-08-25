@@ -314,7 +314,10 @@ jobs:
           echo "=== Frontend Pod Logs ==="
           for pod in $(kubectl get pods -n cicd-demo -l app=frontend -o jsonpath='{.items[*].metadata.name}'); do
             echo "--- Pod: $pod ---"
-            kubectl logs $pod -n cicd-demo --tail=50 || echo "No logs available for $pod"
+            echo "Current logs:"
+            kubectl logs $pod -n cicd-demo --tail=100 || echo "No current logs available for $pod"
+            echo "Previous logs (if any):"
+            kubectl logs $pod -n cicd-demo --previous --tail=100 || echo "No previous logs available for $pod"
             echo "--- Pod Description: $pod ---"
             kubectl describe pod $pod -n cicd-demo
           done
