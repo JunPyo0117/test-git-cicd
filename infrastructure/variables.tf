@@ -28,4 +28,10 @@ variable "eks_node_instance_type" {
   default     = "t3.medium"
 }
 
+variable "pod_cidr" {
+  description = "Pod CIDR block for EKS cluster"
+  type        = string
+  default     = "10.0.1.0/24"
+}
+
 # GitHub repository variable is defined in oidc-setup.tf

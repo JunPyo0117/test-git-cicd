@@ -8,7 +8,7 @@ interface Message {
 }
 
 // 백엔드 API URL 설정
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
 
 function App() {
   const [messages, setMessages] = useState<Message[]>([])
