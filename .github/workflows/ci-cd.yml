@@ -63,6 +63,8 @@ jobs:
     - name: Build and push Backend image
       working-directory: ./backend
       run: |
+        npm ci
+        npm run build
         docker build -t backend .
         docker tag backend:latest ${{ steps.login-ecr.outputs.registry }}/cicd-demo-backend:latest
         docker push ${{ steps.login-ecr.outputs.registry }}/cicd-demo-backend:latest
@@ -73,6 +75,7 @@ jobs:
       env:
         VITE_API_URL: ${{ secrets.API_URL }}
       run: |
+        npm ci
         npm run build
         docker build -t frontend .
         docker tag frontend:latest ${{ steps.login-ecr.outputs.registry }}/cicd-demo-frontend:latest
