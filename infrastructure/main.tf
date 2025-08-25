@@ -477,6 +477,17 @@ resource "aws_security_group" "alb" {
   }
 }
 
+# Security Group Rule: Allow ALB to access EKS cluster
+resource "aws_security_group_rule" "eks_from_alb" {
+  type                     = "ingress"
+  from_port                = 3000
+  to_port                  = 3001
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.alb.id
+  security_group_id        = module.eks.cluster_security_group_id
+  description              = "Allow ALB to access EKS cluster pods"
+}
+
 # Route 53 Hosted Zone (커스텀 도메인이 있는 경우)
 resource "aws_route53_zone" "main" {
   count = var.domain_name != "" ? 1 : 0
