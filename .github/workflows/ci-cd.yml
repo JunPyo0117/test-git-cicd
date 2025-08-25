@@ -178,32 +178,21 @@ jobs:
         echo "DB_HOST: $DB_HOST"
         echo "DB_PASSWORD: [HIDDEN]"
         
-        # Base64 인코딩
-        DB_HOST_B64=$(echo -n "$DB_HOST" | base64)
-        DB_PORT_B64=$(echo -n "5432" | base64)
-        DB_USERNAME_B64=$(echo -n "postgres" | base64)
-        DB_PASSWORD_B64=$(echo -n "$DB_PASSWORD" | base64)
-        DB_NAME_B64=$(echo -n "cicd_demo" | base64)
+        # kubectl을 사용하여 직접 시크릿 생성 (기존 시크릿이 있으면 삭제 후 재생성)
+        kubectl delete secret db-secret -n cicd-demo --ignore-not-found=true
         
-        # 시크릿 파일 생성
-        cat > k8s/backend/secret-generated.yaml << EOF
-        apiVersion: v1
-        kind: Secret
-        metadata:
-          name: db-secret
-          namespace: cicd-demo
-        type: Opaque
-        data:
-          host: $DB_HOST_B64
-          port: $DB_PORT_B64
-          username: $DB_USERNAME_B64
-          password: $DB_PASSWORD_B64
-          database: $DB_NAME_B64
-        EOF
+        kubectl create secret generic db-secret \
+          --namespace=cicd-demo \
+          --from-literal=host="$DB_HOST" \
+          --from-literal=port="5432" \
+          --from-literal=username="postgres" \
+          --from-literal=password="$DB_PASSWORD" \
+          --from-literal=database="cicd_demo"
         
-        echo "Secret file created successfully"
-        echo "Secret file content (for debugging):"
-        cat k8s/backend/secret-generated.yaml
+        echo "Secret created successfully using kubectl"
+        
+        # 시크릿 확인
+        kubectl get secret db-secret -n cicd-demo -o yaml
     
     # Kubernetes 매니페스트 적용
     - name: Deploy to EKS
@@ -221,8 +210,7 @@ jobs:
         echo "Applying ConfigMap..."
         kubectl apply -f k8s/configmap-generated.yaml
         
-        echo "Creating database secret..."
-        kubectl apply -f k8s/backend/secret-generated.yaml
+        echo "Database secret already created in previous step..."
         
         echo "Deploying backend..."
         kubectl apply -f k8s/backend/deployment-generated.yaml
