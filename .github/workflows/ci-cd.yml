@@ -158,7 +158,17 @@ jobs:
         echo "ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}" >> $GITHUB_ENV
         echo "IMAGE_TAG=latest" >> $GITHUB_ENV
         echo "API_URL=${{ secrets.API_URL }}" >> $GITHUB_ENV
-        echo "DOMAIN_NAME=${{ secrets.DOMAIN_NAME }}" >> $GITHUB_ENV
+        
+        # DOMAIN_NAME 처리 (비어있으면 ALB DNS만 사용)
+        DOMAIN_NAME="${{ secrets.DOMAIN_NAME }}"
+        if [ -z "$DOMAIN_NAME" ] || [ "$DOMAIN_NAME" = "" ]; then
+          echo "DOMAIN_NAME is empty, will use ALB DNS only"
+          echo "USE_DOMAIN=false" >> $GITHUB_ENV
+          echo "DOMAIN_NAME=" >> $GITHUB_ENV
+        else
+          echo "DOMAIN_NAME=$DOMAIN_NAME" >> $GITHUB_ENV
+          echo "USE_DOMAIN=true" >> $GITHUB_ENV
+        fi
         
         # Terraform output에서 서브넷 ID와 보안 그룹 ID 가져오기
         PUBLIC_SUBNET_IDS=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=*public*" "Name=vpc-id,Values=$(aws eks describe-cluster --name ${{ env.EKS_CLUSTER_NAME }} --query 'cluster.resourcesVpcConfig.vpcId' --output text)" --query 'Subnets[*].SubnetId' --output text | tr '\t' ',')
@@ -200,8 +210,63 @@ jobs:
         # 환경 변수 치환
         envsubst < k8s/backend/deployment.yaml > k8s/backend/deployment-generated.yaml
         envsubst < k8s/frontend/deployment.yaml > k8s/frontend/deployment-generated.yaml
-        envsubst < k8s/ingress.yaml > k8s/ingress-generated.yaml
         envsubst < k8s/configmap.yaml > k8s/configmap-generated.yaml
+        
+        # Ingress 생성 (도메인 사용 여부에 따라 다르게 처리)
+        if [ "$USE_DOMAIN" = "true" ]; then
+          echo "Creating Ingress with domain: $DOMAIN_NAME"
+          envsubst < k8s/ingress.yaml > k8s/ingress-generated.yaml
+        else
+          echo "Creating Ingress without domain (ALB DNS only)"
+          cat > k8s/ingress-generated.yaml << 'EOF'
+        apiVersion: networking.k8s.io/v1
+        kind: Ingress
+        metadata:
+          name: cicd-ingress
+          namespace: cicd-demo
+          annotations:
+            kubernetes.io/ingress.class: "alb"
+            alb.ingress.kubernetes.io/scheme: "internet-facing"
+            alb.ingress.kubernetes.io/target-type: "ip"
+            alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+            alb.ingress.kubernetes.io/group.name: "cicd-demo"
+            alb.ingress.kubernetes.io/group.order: "1"
+            alb.ingress.kubernetes.io/healthcheck-path: "/"
+            alb.ingress.kubernetes.io/healthcheck-port: "80"
+            alb.ingress.kubernetes.io/healthcheck-protocol: "HTTP"
+            alb.ingress.kubernetes.io/success-codes: "200"
+            alb.ingress.kubernetes.io/cors-allow-origin: "*"
+            alb.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+            alb.ingress.kubernetes.io/cors-allow-headers: "*"
+            alb.ingress.kubernetes.io/cors-expose-headers: "*"
+            alb.ingress.kubernetes.io/cors-max-age: "600"
+        EOF
+          # 환경 변수 치환으로 서브넷과 보안 그룹 추가
+          cat >> k8s/ingress-generated.yaml << EOF
+            alb.ingress.kubernetes.io/subnets: "${PUBLIC_SUBNET_IDS}"
+            alb.ingress.kubernetes.io/security-groups: "${ALB_SECURITY_GROUP_ID}"
+        spec:
+          ingressClassName: alb
+          rules:
+          # ALB DNS로만 접근 (도메인 없음)
+          - http:
+              paths:
+              - path: /
+                pathType: Prefix
+                backend:
+                  service:
+                    name: frontend-service
+                    port:
+                      number: 80
+              - path: /api
+                pathType: Prefix
+                backend:
+                  service:
+                    name: backend-service
+                    port:
+                      number: 80
+        EOF
+        fi
         
         # 배포 (각 단계별로 확인)
         echo "Creating namespace..."
@@ -237,4 +302,13 @@ jobs:
         # ALB DNS 이름 출력
         ALB_DNS=$(kubectl get ingress cicd-ingress -n cicd-demo -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
         echo "ALB DNS Name: $ALB_DNS"
-        echo "Backend API URL: http://$ALB_DNS"
+        
+        if [ "$USE_DOMAIN" = "true" ]; then
+          echo "Frontend URL: https://$DOMAIN_NAME"
+          echo "Backend API URL: https://api.$DOMAIN_NAME"
+          echo "ALB Direct Access: http://$ALB_DNS"
+        else
+          echo "Frontend URL: http://$ALB_DNS"
+          echo "Backend API URL: http://$ALB_DNS/api"
+          echo "Note: No custom domain configured. Access via ALB DNS only."
+        fi
