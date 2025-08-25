@@ -81,7 +81,7 @@ jobs:
         docker tag frontend:latest ${{ steps.login-ecr.outputs.registry }}/cicd-demo-frontend:latest
         docker push ${{ steps.login-ecr.outputs.registry }}/cicd-demo-frontend:latest
     
-    # EKS 설정 및 aws-auth ConfigMap 적용
+    # EKS 설정 및 Access Entry 확인
     - name: Configure EKS access
       run: |
         aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
@@ -96,8 +96,8 @@ jobs:
           exit 1
         fi
         
-        # Check current EKS cluster IAM access
-        echo "Checking current EKS cluster IAM access..."
+        # Check current EKS cluster authentication mode
+        echo "Checking current EKS cluster authentication mode..."
         AUTH_MODE=$(aws eks describe-cluster --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }} --query 'cluster.accessConfig.authenticationMode' --output text)
         echo "Current authentication mode: $AUTH_MODE"
         
@@ -109,56 +109,40 @@ jobs:
         echo "Checking EKS Access Entry for github-actions-role..."
         if aws eks describe-access-entry --cluster-name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }} --principal-arn "arn:aws:iam::471303021447:role/github-actions-role" > /dev/null 2>&1; then
           echo "EKS Access Entry for github-actions-role exists"
+          
+          # Check associated policies
+          echo "Checking associated access policies..."
+          POLICIES=$(aws eks list-associated-access-policies --cluster-name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }} --principal-arn "arn:aws:iam::471303021447:role/github-actions-role" --query 'associatedAccessPolicies[*].policyArn' --output text)
+          echo "Associated policies: $POLICIES"
+          
+          # Check if both required policies are associated
+          if echo "$POLICIES" | grep -q "AmazonEKSAdminPolicy" && echo "$POLICIES" | grep -q "AmazonEKSClusterAdminPolicy"; then
+            echo "Both AmazonEKSAdminPolicy and AmazonEKSClusterAdminPolicy are associated"
+          else
+            echo "Missing required policies. Please ensure both AmazonEKSAdminPolicy and AmazonEKSClusterAdminPolicy are associated"
+            exit 1
+          fi
         else
           echo "EKS Access Entry for github-actions-role not found"
-          echo "Please create EKS Access Entry with AmazonEKSAdminPolicy for github-actions-role"
+          echo "Please create EKS Access Entry with both AmazonEKSAdminPolicy and AmazonEKSClusterAdminPolicy for github-actions-role"
           exit 1
         fi
         
-        # Check if we can access the cluster via kubectl
+        # Test kubectl access
         echo "Testing kubectl access..."
         if kubectl get nodes --request-timeout=30s > /dev/null 2>&1; then
           echo "kubectl access is working!"
         else
-          echo "kubectl access failed. This indicates that the current IAM role is not in the EKS cluster's access list."
-          echo "Please add the following IAM role to your EKS cluster's access configuration:"
-          echo "Role ARN: arn:aws:iam::471303021447:role/github-actions-role"
-          echo "Username: github-actions"
-          echo "Groups: system:masters"
-          echo ""
-          echo "You can do this via:"
-          echo "1. AWS Console: EKS > Clusters > cicd-cluster > Access tab"
-          echo "2. Or via AWS CLI: aws eks update-cluster-config"
-          echo ""
-          echo "For now, we'll try to continue with the deployment..."
+          echo "kubectl access failed. This indicates that the EKS Access Entry is not properly configured."
+          echo "Please ensure the following EKS Access Entry exists with both policies:"
+          echo "1. Go to AWS Console: EKS > Clusters > cicd-cluster > Access tab"
+          echo "2. Verify github-actions-role has both AmazonEKSAdminPolicy and AmazonEKSClusterAdminPolicy"
+          echo "3. Or create via AWS CLI:"
+          echo "   aws eks create-access-entry --cluster-name cicd-cluster --principal-arn 'arn:aws:iam::471303021447:role/github-actions-role' --type STANDARD"
+          echo "   aws eks associate-access-policy --cluster-name cicd-cluster --principal-arn 'arn:aws:iam::471303021447:role/github-actions-role' --policy-arn 'arn:aws:eks::aws:cluster-access-policy/AmazonEKSAdminPolicy' --access-scope type=cluster"
+          echo "   aws eks associate-access-policy --cluster-name cicd-cluster --principal-arn 'arn:aws:iam::471303021447:role/github-actions-role' --policy-arn 'arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy' --access-scope type=cluster"
+          exit 1
         fi
-        
-        # Wait for authentication mode update to take effect
-        echo "Waiting for authentication mode update to take effect..."
-        sleep 30
-        
-        # Wait for kubectl access to become available
-        echo "Waiting for kubectl access to become available..."
-        for i in {1..15}; do
-          if kubectl get nodes --request-timeout=30s > /dev/null 2>&1; then
-            echo "Successfully connected to EKS cluster"
-            break
-          else
-            echo "Attempt $i: kubectl access not available yet..."
-            if [ $i -eq 15 ]; then
-              echo "kubectl access is still not available after 15 attempts"
-              echo "This is likely because the EKS Access Entry is not properly configured"
-              echo "Please ensure the following EKS Access Entry exists with AmazonEKSAdminPolicy:"
-              echo "1. Go to AWS Console: EKS > Clusters > cicd-cluster > Access tab"
-              echo "2. Verify github-actions-role has AmazonEKSAdminPolicy"
-              echo "3. Or create via AWS CLI:"
-              echo "   aws eks create-access-entry --cluster-name cicd-cluster --principal-arn 'arn:aws:iam::471303021447:role/github-actions-role' --type STANDARD"
-              echo "   aws eks associate-access-policy --cluster-name cicd-cluster --principal-arn 'arn:aws:iam::471303021447:role/github-actions-role' --policy-arn 'arn:aws:eks::aws:cluster-access-policy/AmazonEKSAdminPolicy' --access-scope type=cluster"
-              exit 1
-            fi
-            sleep 30
-          fi
-        done
         
         # Final test
         kubectl get nodes

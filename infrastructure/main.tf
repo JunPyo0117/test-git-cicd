@@ -126,21 +126,73 @@ resource "aws_iam_user_policy_attachment" "my_user_eks_access" {
   policy_arn = aws_iam_policy.my_user_eks_access.arn
 }
 
-# EKS Access Entry for my_user (optional, can be managed via aws-auth ConfigMap)
-# resource "aws_eks_access_entry" "my_user" {
-#   cluster_name      = module.eks.cluster_name
-#   principal_arn     = aws_iam_user.my_user.arn
-#   kubernetes_groups = ["eks-console-dashboard-full-access-group"]
-#   type             = "STANDARD"
-# }
+# EKS Access Entry for my_user (will be created after cluster is ready)
+resource "aws_eks_access_entry" "my_user" {
+  cluster_name      = module.eks.cluster_name
+  principal_arn     = aws_iam_user.my_user.arn
+  kubernetes_groups = ["admin"]
+  type             = "STANDARD"
+}
 
-# EKS Access Entry for github-actions-role (optional, can be managed via aws-auth ConfigMap)
-# resource "aws_eks_access_entry" "github_actions" {
-#   cluster_name      = module.eks.cluster_name
-#   principal_arn     = "arn:aws:iam::471303021447:role/github-actions-role"
-#   kubernetes_groups = ["eks-console-dashboard-full-access-group"]
-#   type             = "STANDARD"
-# }
+# EKS Access Entry for github-actions-role (will be created after cluster is ready)
+resource "aws_eks_access_entry" "github_actions" {
+  cluster_name      = module.eks.cluster_name
+  principal_arn     = "arn:aws:iam::471303021447:role/github-actions-role"
+  kubernetes_groups = ["admin"]
+  type             = "STANDARD"
+}
+
+# Associate AmazonEKSAdminPolicy with my_user
+resource "aws_eks_access_policy_association" "my_user_admin" {
+  cluster_name  = module.eks.cluster_name
+  principal_arn = aws_iam_user.my_user.arn
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSAdminPolicy"
+  
+  access_scope {
+    type = "cluster"
+  }
+  
+  depends_on = [aws_eks_access_entry.my_user]
+}
+
+# Associate AmazonEKSClusterAdminPolicy with my_user
+resource "aws_eks_access_policy_association" "my_user_cluster_admin" {
+  cluster_name  = module.eks.cluster_name
+  principal_arn = aws_iam_user.my_user.arn
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+  
+  access_scope {
+    type = "cluster"
+  }
+  
+  depends_on = [aws_eks_access_entry.my_user]
+}
+
+# Associate AmazonEKSAdminPolicy with github-actions-role
+resource "aws_eks_access_policy_association" "github_actions_admin" {
+  cluster_name  = module.eks.cluster_name
+  principal_arn = "arn:aws:iam::471303021447:role/github-actions-role"
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSAdminPolicy"
+  
+  access_scope {
+    type = "cluster"
+  }
+  
+  depends_on = [aws_eks_access_entry.github_actions]
+}
+
+# Associate AmazonEKSClusterAdminPolicy with github-actions-role
+resource "aws_eks_access_policy_association" "github_actions_cluster_admin" {
+  cluster_name  = module.eks.cluster_name
+  principal_arn = "arn:aws:iam::471303021447:role/github-actions-role"
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+  
+  access_scope {
+    type = "cluster"
+  }
+  
+  depends_on = [aws_eks_access_entry.github_actions]
+}
 
 
 

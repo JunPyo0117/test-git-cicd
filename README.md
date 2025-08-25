@@ -74,16 +74,23 @@ GitHub Actions가 자동으로 다음을 수행합니다:
 
 만약 GitHub Actions에서 EKS 배포가 실패하는 경우:
 
-1. **IAM 역할 권한 확인**
+1. **EKS Access Entry 확인**
    ```bash
-   aws iam get-role --role-name github-actions-role
-   aws iam list-attached-role-policies --role-name github-actions-role
+   # Access Entry 목록 확인
+   aws eks list-access-entries --cluster-name cicd-cluster --region ap-northeast-2
+   
+   # github-actions-role의 Access Entry 확인
+   aws eks describe-access-entry --cluster-name cicd-cluster --principal-arn "arn:aws:iam::471303021447:role/github-actions-role" --region ap-northeast-2
+   
+   # 연결된 정책 확인
+   aws eks list-associated-access-policies --cluster-name cicd-cluster --principal-arn "arn:aws:iam::471303021447:role/github-actions-role" --region ap-northeast-2
    ```
 
-2. **aws-auth ConfigMap 확인**
-   ```bash
-   kubectl get configmap aws-auth -n kube-system -o yaml
-   ```
+2. **필요한 정책 확인**
+   - `AmazonEKSAdminPolicy`
+   - `AmazonEKSClusterAdminPolicy`
+   
+   두 정책이 모두 연결되어 있어야 합니다.
 
 3. **GitHub Actions 로그 확인**
    - GitHub 저장소의 Actions 탭에서 워크플로우 실행 로그 확인
@@ -118,9 +125,23 @@ test-git-cicd/
 ## 🔐 보안
 
 - GitHub Actions는 OIDC를 통해 AWS에 인증합니다
+- EKS 클러스터는 EKS Access Entry를 사용하여 IAM 사용자/역할의 Kubernetes 접근을 관리합니다
 - RDS는 프라이빗 서브넷에 배치됩니다
 - ECR 리포지토리는 암호화됩니다
 - 모든 트래픽은 HTTPS를 통해 전송됩니다
+
+### EKS Access Entry
+
+이 프로젝트는 AWS의 권장 방식인 EKS Access Entry를 사용합니다:
+
+- **my_user**: 로컬 개발용 IAM 사용자
+- **github-actions-role**: GitHub Actions CI/CD용 IAM 역할
+
+각각에 다음 정책이 연결됩니다:
+- `AmazonEKSAdminPolicy`: 기본 EKS 관리 권한
+- `AmazonEKSClusterAdminPolicy`: 클러스터 관리자 권한
+
+기존의 `aws-auth` ConfigMap은 더 이상 사용하지 않습니다.
 
 ## 📊 모니터링
 
