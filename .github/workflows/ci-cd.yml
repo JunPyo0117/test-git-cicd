@@ -105,37 +105,18 @@ jobs:
         CURRENT_ARN=$(aws sts get-caller-identity --query 'Arn' --output text)
         echo "Current AWS ARN: $CURRENT_ARN"
         
-        # Try to add github-actions-role to EKS cluster access if not already present
-        echo "Attempting to add github-actions-role to EKS cluster access..."
-        
-        # Create a temporary access entry configuration
-        cat > access-entry.json << EOF
-        {
-          "principalArn": "arn:aws:iam::471303021447:role/github-actions-role",
-          "type": "Standard",
-          "kubernetesGroups": ["system:masters"]
-        }
-        EOF
-        
-        # Try to create access entry for github-actions-role
-        aws eks create-access-entry \
-          --cluster-name ${{ env.EKS_CLUSTER_NAME }} \
-          --region ${{ env.AWS_REGION }} \
-          --principal-arn "arn:aws:iam::471303021447:role/github-actions-role" \
-          --type Standard \
-          --kubernetes-groups system:masters || {
-          echo "github-actions-role access entry might already exist or failed to create"
-        }
-        
-        # Try to create access entry for my_user
-        aws eks create-access-entry \
-          --cluster-name ${{ env.EKS_CLUSTER_NAME }} \
-          --region ${{ env.AWS_REGION }} \
-          --principal-arn "arn:aws:iam::471303021447:user/my_user" \
-          --type Standard \
-          --kubernetes-groups system:masters || {
-          echo "my_user access entry might already exist or failed to create"
-        }
+        # Ensure EKS cluster is in API_AND_CONFIG_MAP mode for aws-auth ConfigMap to work
+        if [ "$AUTH_MODE" != "API_AND_CONFIG_MAP" ]; then
+          echo "Updating EKS cluster authentication mode to API_AND_CONFIG_MAP..."
+          aws eks update-cluster-config \
+            --name ${{ env.EKS_CLUSTER_NAME }} \
+            --region ${{ env.AWS_REGION }} \
+            --access-config authenticationMode=API_AND_CONFIG_MAP || {
+            echo "Failed to update authentication mode, but continuing..."
+          }
+        else
+          echo "EKS cluster is already in API_AND_CONFIG_MAP mode"
+        fi
         
         # Check if we can access the cluster via kubectl
         echo "Testing kubectl access..."
@@ -155,8 +136,8 @@ jobs:
           echo "For now, we'll try to continue with the deployment..."
         fi
         
-        # Wait for access entry to take effect
-        echo "Waiting for access entry to take effect..."
+        # Wait for authentication mode update to take effect
+        echo "Waiting for authentication mode update to take effect..."
         sleep 30
         
         # Try to apply aws-auth ConfigMap

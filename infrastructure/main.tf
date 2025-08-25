@@ -126,21 +126,21 @@ resource "aws_iam_user_policy_attachment" "my_user_eks_access" {
   policy_arn = aws_iam_policy.my_user_eks_access.arn
 }
 
-# EKS Access Entry for my_user
-resource "aws_eks_access_entry" "my_user" {
-  cluster_name      = module.eks.cluster_name
-  principal_arn     = aws_iam_user.my_user.arn
-  kubernetes_groups = ["eks-console-dashboard-full-access-group"]
-  type             = "STANDARD"
-}
+# EKS Access Entry for my_user (optional, can be managed via aws-auth ConfigMap)
+# resource "aws_eks_access_entry" "my_user" {
+#   cluster_name      = module.eks.cluster_name
+#   principal_arn     = aws_iam_user.my_user.arn
+#   kubernetes_groups = ["eks-console-dashboard-full-access-group"]
+#   type             = "STANDARD"
+# }
 
-# EKS Access Entry for github-actions-role
-resource "aws_eks_access_entry" "github_actions" {
-  cluster_name      = module.eks.cluster_name
-  principal_arn     = "arn:aws:iam::471303021447:role/github-actions-role"
-  kubernetes_groups = ["eks-console-dashboard-full-access-group"]
-  type             = "STANDARD"
-}
+# EKS Access Entry for github-actions-role (optional, can be managed via aws-auth ConfigMap)
+# resource "aws_eks_access_entry" "github_actions" {
+#   cluster_name      = module.eks.cluster_name
+#   principal_arn     = "arn:aws:iam::471303021447:role/github-actions-role"
+#   kubernetes_groups = ["eks-console-dashboard-full-access-group"]
+#   type             = "STANDARD"
+# }
 
 
 
