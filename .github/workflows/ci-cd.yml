@@ -81,31 +81,46 @@ jobs:
         docker tag frontend:latest ${{ steps.login-ecr.outputs.registry }}/cicd-demo-frontend:latest
         docker push ${{ steps.login-ecr.outputs.registry }}/cicd-demo-frontend:latest
     
-    # EKS 설정
-    - name: Update kubeconfig
+    # EKS 설정 및 aws-auth ConfigMap 적용
+    - name: Configure EKS access
       run: |
         aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
         aws sts get-caller-identity
         
         # Apply aws-auth ConfigMap first
+        echo "Applying aws-auth ConfigMap..."
         kubectl apply -f k8s/aws-auth-configmap.yaml
         
         # Wait for aws-auth ConfigMap to take effect and retry kubectl commands
         echo "Waiting for aws-auth ConfigMap to take effect..."
-        for i in {1..10}; do
+        for i in {1..15}; do
           if kubectl get nodes --request-timeout=30s > /dev/null 2>&1; then
             echo "Successfully connected to EKS cluster"
             break
           else
             echo "Attempt $i: Waiting for authentication to be ready..."
+            if [ $i -eq 15 ]; then
+              echo "Failed to connect to EKS cluster after 15 attempts"
+              echo "Current AWS identity:"
+              aws sts get-caller-identity
+              echo "Current kubeconfig context:"
+              kubectl config current-context
+              echo "Available contexts:"
+              kubectl config get-contexts
+              echo "Trying to get cluster info using AWS CLI..."
+              aws eks describe-cluster --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+              exit 1
+            fi
             sleep 30
           fi
         done
         
         # Final test
         kubectl get nodes
-        
-        # AWS Load Balancer Controller ServiceAccount 생성
+    
+    # AWS Load Balancer Controller ServiceAccount 생성
+    - name: Create AWS Load Balancer Controller ServiceAccount
+      run: |
         cat > aws-load-balancer-controller-sa.yaml << EOF
         apiVersion: v1
         kind: ServiceAccount
