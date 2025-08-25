@@ -266,19 +266,19 @@ jobs:
         
         # 시크릿 파일 생성
         cat > k8s/backend/secret-generated.yaml << EOF
-        apiVersion: v1
-        kind: Secret
-        metadata:
-          name: db-secret
-          namespace: cicd-demo
-        type: Opaque
-        data:
-          host: $DB_HOST_B64
-          port: $DB_PORT_B64
-          username: $DB_USERNAME_B64
-          password: $DB_PASSWORD_B64
-          database: $DB_NAME_B64
-        EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-secret
+  namespace: cicd-demo
+type: Opaque
+data:
+  host: $DB_HOST_B64
+  port: $DB_PORT_B64
+  username: $DB_USERNAME_B64
+  password: $DB_PASSWORD_B64
+  database: $DB_NAME_B64
+EOF
         
         echo "Secret file created successfully"
         echo "Secret file content (for debugging):"
