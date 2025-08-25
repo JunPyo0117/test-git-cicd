@@ -84,7 +84,44 @@ jobs:
     # EKS 설정 및 Access Entry 확인
     - name: Configure EKS access
       run: |
-        aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+        # EKS 클러스터 정보 가져오기
+        CLUSTER_ENDPOINT=$(aws eks describe-cluster --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }} --query 'cluster.endpoint' --output text)
+        CLUSTER_CA_DATA=$(aws eks describe-cluster --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }} --query 'cluster.certificateAuthority.data' --output text)
+        
+        echo "Cluster Endpoint: $CLUSTER_ENDPOINT"
+        echo "Cluster CA Data: $CLUSTER_CA_DATA"
+        
+        # kubeconfig 파일 수동 생성
+        mkdir -p ~/.kube
+        cat > ~/.kube/config << EOF
+        apiVersion: v1
+        kind: Config
+        clusters:
+        - name: ${{ env.EKS_CLUSTER_NAME }}
+          cluster:
+            server: $CLUSTER_ENDPOINT
+            certificate-authority-data: $CLUSTER_CA_DATA
+        contexts:
+        - name: ${{ env.EKS_CLUSTER_NAME }}
+          context:
+            cluster: ${{ env.EKS_CLUSTER_NAME }}
+            user: aws
+        current-context: ${{ env.EKS_CLUSTER_NAME }}
+        users:
+        - name: aws
+          user:
+            exec:
+              apiVersion: client.authentication.k8s.io/v1beta1
+              command: aws
+              args:
+                - eks
+                - get-token
+                - --cluster-name
+                - ${{ env.EKS_CLUSTER_NAME }}
+                - --region
+                - ${{ env.AWS_REGION }}
+        EOF
+        
         aws sts get-caller-identity
         
         # Check if EKS cluster is accessible via AWS CLI
