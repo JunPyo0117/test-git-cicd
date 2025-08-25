@@ -10,8 +10,17 @@
 - **Infrastructure**: Terraform + AWS EKS
 - **CI/CD**: GitHub Actions
 - **Container Registry**: AWS ECR
-- **Load Balancer**: AWS ALB + AWS Load Balancer Controller
-- **CDN**: CloudFront
+- **Load Balancer**: AWS ALB (퍼블릭 서브넷)
+- **Load Balancer**: AWS ALB (EKS Ingress Controller가 자동 생성)
+- **DNS**: Route 53
+
+## 🔄 아키텍처 흐름
+
+```
+사용자 → Route 53 → ALB (퍼블릭) → EKS (React + NestJS) → RDS
+                ↓
+GitHub → GitHub Actions → Docker → ECR → EKS
+```
 
 ## 📋 사전 요구사항
 
@@ -56,9 +65,8 @@ git push origin main
 GitHub Actions가 자동으로 다음을 수행합니다:
 - 프론트엔드/백엔드 테스트
 - Docker 이미지 빌드 및 ECR 푸시
-- EKS 클러스터에 백엔드 배포
-- S3에 프론트엔드 배포
-- CloudFront 캐시 무효화
+- EKS 클러스터에 프론트엔드와 백엔드 배포
+- AWS Load Balancer Controller가 ALB 자동 생성
 
 ## 🔧 문제 해결
 
@@ -180,6 +188,6 @@ kubectl logs -f deployment/backend -n cicd-demo
 3. kubectl describe 명령어로 상세 정보 확인
 4. GitHub Issues에 문제 등록
 
-## �� 라이선스
+## 📄 라이선스
 
 MIT License

@@ -28,8 +28,4 @@ variable "eks_node_instance_type" {
   default     = "t3.medium"
 }
 
-variable "github_repository" {
-  description = "GitHub repository name (format: owner/repo)"
-  type        = string
-  default     = "your-username/test-git-cicd"
-}
+# GitHub repository variable is defined in oidc-setup.tf

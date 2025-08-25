@@ -1,7 +1,7 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: backend-ingress
+  name: cicd-ingress
   namespace: cicd-demo
   annotations:
     kubernetes.io/ingress.class: "alb"
@@ -10,8 +10,8 @@ metadata:
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
     alb.ingress.kubernetes.io/group.name: "cicd-demo"
     alb.ingress.kubernetes.io/group.order: "1"
-    alb.ingress.kubernetes.io/healthcheck-path: "/api/messages/health"
-    alb.ingress.kubernetes.io/healthcheck-port: "3001"
+    alb.ingress.kubernetes.io/healthcheck-path: "/"
+    alb.ingress.kubernetes.io/healthcheck-port: "80"
     alb.ingress.kubernetes.io/healthcheck-protocol: "HTTP"
     alb.ingress.kubernetes.io/success-codes: "200"
     alb.ingress.kubernetes.io/cors-allow-origin: "*"
@@ -19,13 +19,47 @@ metadata:
     alb.ingress.kubernetes.io/cors-allow-headers: "*"
     alb.ingress.kubernetes.io/cors-expose-headers: "*"
     alb.ingress.kubernetes.io/cors-max-age: "600"
+    # ALB가 퍼블릭 서브넷에 위치하도록 설정 (Terraform에서 생성된 서브넷 사용)
+    alb.ingress.kubernetes.io/subnets: "${PUBLIC_SUBNET_IDS}"
+    # ALB 보안 그룹 설정
+    alb.ingress.kubernetes.io/security-groups: "${ALB_SECURITY_GROUP_ID}"
 spec:
   ingressClassName: alb
   rules:
-  - host: api.cicd-demo.local
+  # 프론트엔드 (루트 도메인)
+  - host: ${DOMAIN_NAME}
     http:
       paths:
       - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend-service
+            port:
+              number: 80
+  # 백엔드 API (서브도메인)
+  - host: api.${DOMAIN_NAME}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-service
+            port:
+              number: 80
+  # 개발 환경용 (도메인이 없는 경우)
+  - host: cicd-demo.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend-service
+            port:
+              number: 80
+      - path: /api
         pathType: Prefix
         backend:
           service:

@@ -5,6 +5,7 @@ metadata:
   namespace: cicd-demo
   labels:
     app: backend
+    version: v1
 spec:
   replicas: 3
   selector:
@@ -14,16 +15,19 @@ spec:
     metadata:
       labels:
         app: backend
+        version: v1
     spec:
       containers:
       - name: backend
-        image: 471303021447.dkr.ecr.ap-northeast-2.amazonaws.com/cicd-demo-backend:latest
+        image: ${ECR_REGISTRY}/cicd-demo-backend:${IMAGE_TAG}
         ports:
         - containerPort: 3001
           name: http
         env:
         - name: NODE_ENV
           value: "production"
+        - name: PORT
+          value: "3001"
         - name: DB_HOST
           valueFrom:
             secretKeyRef:
@@ -72,3 +76,11 @@ spec:
           periodSeconds: 5
           timeoutSeconds: 3
           failureThreshold: 3
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL

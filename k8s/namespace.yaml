@@ -4,3 +4,4 @@ metadata:
   name: cicd-demo
   labels:
     name: cicd-demo
+    environment: production

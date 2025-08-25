@@ -84,6 +84,7 @@ output "public_subnets" {
   value       = module.vpc.public_subnets
 }
 
+# Route 53 outputs
 output "route53_zone_id" {
   description = "Route 53 hosted zone ID"
   value       = var.domain_name != "" ? aws_route53_zone.main[0].zone_id : null
@@ -94,24 +95,25 @@ output "route53_name_servers" {
   value       = var.domain_name != "" ? aws_route53_zone.main[0].name_servers : null
 }
 
-output "acm_certificate_arn" {
-  description = "ACM certificate ARN"
-  value       = var.domain_name != "" ? aws_acm_certificate.frontend[0].arn : null
-}
-
+# ALB outputs - EKS Ingress Controller가 자동 생성
 output "alb_dns_name" {
-  description = "ALB DNS name"
-  value       = aws_lb.backend.dns_name
+  description = "ALB DNS name (EKS Ingress Controller가 생성)"
+  value       = "EKS Ingress Controller가 ALB를 자동 생성합니다"
 }
 
 output "alb_zone_id" {
   description = "ALB zone ID"
-  value       = aws_lb.backend.zone_id
+  value       = "Z35SXDOTRQ7R7K"  # ALB의 기본 hosted zone ID
 }
 
-output "target_group_arn" {
-  description = "ALB target group ARN"
-  value       = aws_lb_target_group.backend.arn
+output "backend_api_url" {
+  description = "Backend API URL"
+  value       = var.domain_name != "" ? "https://api.${var.domain_name}" : "EKS Ingress Controller가 생성한 ALB DNS"
+}
+
+output "acm_certificate_arn" {
+  description = "ACM certificate ARN"
+  value       = var.domain_name != "" ? aws_acm_certificate.frontend[0].arn : null
 }
 
 # IAM User outputs

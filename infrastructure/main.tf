@@ -419,7 +419,7 @@ resource "aws_route53_zone" "main" {
   }
 }
 
-# Route 53 A Record for CloudFront
+# Route 53 A Record for CloudFront (Frontend)
 resource "aws_route53_record" "frontend" {
   count = var.domain_name != "" ? 1 : 0
   
@@ -431,6 +431,23 @@ resource "aws_route53_record" "frontend" {
     name                   = aws_cloudfront_distribution.frontend.domain_name
     zone_id                = aws_cloudfront_distribution.frontend.hosted_zone_id
     evaluate_target_health = false
+  }
+}
+
+# Route 53 A Record for ALB (Backend API) - EKS Ingress Controller가 생성한 ALB 사용
+resource "aws_route53_record" "backend" {
+  count = var.domain_name != "" ? 1 : 0
+  
+  zone_id = aws_route53_zone.main[0].zone_id
+  name    = "api.${var.domain_name}"
+  type    = "A"
+  
+  # EKS Ingress Controller가 생성한 ALB의 DNS 이름을 사용
+  # 실제 ALB DNS는 Ingress 생성 후에 확인 가능
+  alias {
+    name                   = "placeholder-alb-dns-name"  # Ingress 생성 후 업데이트 필요
+    zone_id                = "Z35SXDOTRQ7R7K"  # ALB의 기본 hosted zone ID
+    evaluate_target_health = true
   }
 }
 
@@ -484,56 +501,8 @@ resource "aws_acm_certificate_validation" "frontend" {
   validation_record_fqdns = aws_route53_record.cert_validation[*].fqdn
 }
 
-# Application Load Balancer for backend
-resource "aws_lb" "backend" {
-  name               = "cicd-backend-alb"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb.id]
-  subnets            = module.vpc.public_subnets
-  
-  enable_deletion_protection = false
-  
-  tags = {
-    Name = "cicd-backend-alb"
-  }
-}
-
-# ALB Target Group
-resource "aws_lb_target_group" "backend" {
-  name     = "cicd-backend-tg"
-  port     = 3001
-  protocol = "HTTP"
-  vpc_id   = module.vpc.vpc_id
-  
-  health_check {
-    enabled             = true
-    healthy_threshold   = 2
-    interval            = 30
-    matcher             = "200"
-    path                = "/api/messages/health"
-    port                = "traffic-port"
-    protocol            = "HTTP"
-    timeout             = 5
-    unhealthy_threshold = 2
-  }
-  
-  tags = {
-    Name = "cicd-backend-tg"
-  }
-}
-
-# ALB Listener
-resource "aws_lb_listener" "backend" {
-  load_balancer_arn = aws_lb.backend.arn
-  port              = "80"
-  protocol          = "HTTP"
-  
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.backend.arn
-  }
-}
+# Application Load Balancer for backend - EKS Ingress Controller가 자동 생성하므로 제거
+# AWS Load Balancer Controller가 Ingress를 통해 ALB를 자동으로 생성합니다.
 
 # CloudFront CORS Response Headers Policy
 resource "aws_cloudfront_response_headers_policy" "cors" {
@@ -590,105 +559,4 @@ resource "aws_cloudfront_response_headers_policy" "cors" {
 
 
 
-# IAM role for GitHub Actions
-resource "aws_iam_role" "github_actions" {
-  name = "github-actions-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRoleWithWebIdentity"
-        Effect = "Allow"
-        Principal = {
-          Federated = "arn:aws:iam::471303021447:oidc-provider/token.actions.githubusercontent.com"
-        }
-        Condition = {
-          StringEquals = {
-            "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-          }
-          StringLike = {
-            "token.actions.githubusercontent.com:sub" = "repo:JunPyo0117/test-git-cicd:*"
-          }
-        }
-      }
-    ]
-  })
-
-  tags = {
-    Name = "github-actions-role"
-  }
-}
-
-# IAM Policy for GitHub Actions
-resource "aws_iam_policy" "github_actions" {
-  name = "github-actions-policy"
-  
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "eks:DescribeCluster",
-          "eks:ListClusters",
-          "eks:AccessKubernetesApi",
-          "eks:DescribeNodegroup",
-          "eks:ListNodegroups"
-        ]
-        Resource = "*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "ecr:GetAuthorizationToken",
-          "ecr:BatchCheckLayerAvailability",
-          "ecr:GetDownloadUrlForLayer",
-          "ecr:BatchGetImage",
-          "ecr:PutImage",
-          "ecr:InitiateLayerUpload",
-          "ecr:UploadLayerPart",
-          "ecr:CompleteLayerUpload"
-        ]
-        Resource = "*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:GetObject",
-          "s3:PutObject",
-          "s3:DeleteObject",
-          "s3:ListBucket"
-        ]
-        Resource = [
-          aws_s3_bucket.frontend.arn,
-          "${aws_s3_bucket.frontend.arn}/*"
-        ]
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "cloudfront:CreateInvalidation"
-        ]
-        Resource = aws_cloudfront_distribution.frontend.arn
-      }
-    ]
-  })
-}
-
-# GitHub Actions 역할에 정책 연결
-resource "aws_iam_role_policy_attachment" "github_actions" {
-  role       = aws_iam_role.github_actions.name
-  policy_arn = aws_iam_policy.github_actions.arn
-}
-
-# GitHub Actions OIDC Provider
-resource "aws_iam_openid_connect_provider" "github_actions" {
-  url = "https://token.actions.githubusercontent.com"
-  
-  client_id_list = ["sts.amazonaws.com"]
-  
-  thumbprint_list = [
-    "6938fd4d98bab03faadb97b34396831e3780aea1"
-  ]
-}
+# GitHub Actions 관련 리소스는 oidc-setup.tf에서 관리됩니다.

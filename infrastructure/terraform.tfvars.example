@@ -1,0 +1,16 @@
+# AWS 설정
+aws_region = "ap-northeast-2"
+environment = "production"
+
+# 도메인 설정 (선택사항)
+# 실제 도메인이 있는 경우 설정하세요
+domain_name = ""
+
+# 데이터베이스 설정
+db_instance_class = "db.t3.micro"
+
+# EKS 노드 설정
+eks_node_instance_type = "t3.medium"
+
+# GitHub 저장소 설정
+github_repository = "your-username/test-git-cicd"
