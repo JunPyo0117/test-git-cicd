@@ -58,7 +58,7 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>🚀 AWS CI/CD 파이프라인 데모</h1>
+        <h1>🚀 AWS CI/CD 파이프라인 데모 테스트</h1>
         <p>React + NestJS + AWS EKS + RDS</p>
       </header>
 
