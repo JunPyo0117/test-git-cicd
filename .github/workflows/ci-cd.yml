@@ -217,9 +217,16 @@ jobs:
         envsubst < k8s/configmap.yaml > k8s/configmap-generated.yaml
         
         # Ingress 생성 (도메인 사용 여부에 따라 다르게 처리)
+        echo "=== Ingress Generation Debug ==="
+        echo "USE_DOMAIN: $USE_DOMAIN"
+        echo "DOMAIN_NAME: $DOMAIN_NAME"
+        echo "PUBLIC_SUBNET_IDS: $PUBLIC_SUBNET_IDS"
+        echo "ALB_SECURITY_GROUP_ID: $ALB_SECURITY_GROUP_ID"
+        
         if [ "$USE_DOMAIN" = "true" ]; then
           echo "Creating Ingress with domain: $DOMAIN_NAME"
           envsubst < k8s/ingress.yaml > k8s/ingress-generated.yaml
+          echo "Ingress file created from template"
         else
           echo "Creating Ingress without domain (ALB DNS only)"
           cat > k8s/ingress-generated.yaml << 'EOF'
@@ -272,6 +279,18 @@ jobs:
         EOF
         fi
         
+        # Ingress 파일 생성 확인
+        echo "=== Ingress File Check ==="
+        if [ -f "k8s/ingress-generated.yaml" ]; then
+          echo "✅ Ingress file created successfully"
+          echo "File size: $(wc -c < k8s/ingress-generated.yaml) bytes"
+          echo "First 10 lines of Ingress file:"
+          head -10 k8s/ingress-generated.yaml
+        else
+          echo "❌ Ingress file not found!"
+          exit 1
+        fi
+        
         # 배포 (각 단계별로 확인)
         echo "Creating namespace..."
         kubectl apply -f k8s/namespace.yaml
@@ -294,7 +313,15 @@ jobs:
         kubectl apply -f k8s/frontend/service.yaml
         
         echo "Applying Ingress..."
+        echo "=== Ingress Apply Debug ==="
         kubectl apply -f k8s/ingress-generated.yaml
+        echo "Ingress applied successfully"
+        
+        # Ingress 상태 확인
+        echo "=== Ingress Status Check ==="
+        kubectl get ingress -n cicd-demo
+        echo "Ingress details:"
+        kubectl describe ingress cicd-ingress -n cicd-demo
         
         # 배포 상태 확인
         echo "Waiting for backend deployment to be ready..."
