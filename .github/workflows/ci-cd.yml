@@ -52,7 +52,7 @@ jobs:
         role-to-assume: arn:aws:iam::471303021447:role/github-actions-role
         aws-region: ${{ env.AWS_REGION }}
         role-session-name: github-actions-${{ github.run_id }}
-        role-duration-seconds: 1200
+        role-duration-seconds: 3600
     
     # ECR 로그인
     - name: Login to Amazon ECR
@@ -87,11 +87,23 @@ jobs:
         aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
         aws sts get-caller-identity
         
-        # Test EKS access
-        kubectl get nodes
-        
-        # Apply aws-auth ConfigMap if needed
+        # Apply aws-auth ConfigMap first
         kubectl apply -f k8s/aws-auth-configmap.yaml
+        
+        # Wait for aws-auth ConfigMap to take effect and retry kubectl commands
+        echo "Waiting for aws-auth ConfigMap to take effect..."
+        for i in {1..10}; do
+          if kubectl get nodes --request-timeout=30s > /dev/null 2>&1; then
+            echo "Successfully connected to EKS cluster"
+            break
+          else
+            echo "Attempt $i: Waiting for authentication to be ready..."
+            sleep 30
+          fi
+        done
+        
+        # Final test
+        kubectl get nodes
         
         # AWS Load Balancer Controller ServiceAccount 생성
         cat > aws-load-balancer-controller-sa.yaml << EOF
@@ -112,14 +124,19 @@ jobs:
         helm repo add eks https://aws.github.io/eks-charts
         helm repo update
         
-        # AWS Load Balancer Controller 설치
-        helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
+        # VPC ID 가져오기
+        VPC_ID=$(aws eks describe-cluster --name ${{ env.EKS_CLUSTER_NAME }} --query 'cluster.resourcesVpcConfig.vpcId' --output text)
+        echo "VPC ID: $VPC_ID"
+        
+        # AWS Load Balancer Controller 설치 (기존 설치가 있다면 업그레이드)
+        helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
           -n kube-system \
           --set clusterName=${{ env.EKS_CLUSTER_NAME }} \
           --set serviceAccount.create=false \
           --set serviceAccount.name=aws-load-balancer-controller \
           --set region=${{ env.AWS_REGION }} \
-          --set vpcId=$(aws eks describe-cluster --name ${{ env.EKS_CLUSTER_NAME }} --query 'cluster.resourcesVpcConfig.vpcId' --output text)
+          --set vpcId=$VPC_ID \
+          --wait --timeout=300s
         
         # Controller가 준비될 때까지 대기
         kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=aws-load-balancer-controller -n kube-system --timeout=300s
@@ -174,18 +191,32 @@ jobs:
         envsubst < k8s/ingress.yaml > k8s/ingress-generated.yaml
         envsubst < k8s/configmap.yaml > k8s/configmap-generated.yaml
         
-        # 배포
+        # 배포 (각 단계별로 확인)
+        echo "Creating namespace..."
         kubectl apply -f k8s/namespace.yaml
+        
+        echo "Applying ConfigMap..."
         kubectl apply -f k8s/configmap-generated.yaml
+        
+        echo "Creating database secret..."
         kubectl apply -f k8s/backend/secret-generated.yaml
+        
+        echo "Deploying backend..."
         kubectl apply -f k8s/backend/deployment-generated.yaml
         kubectl apply -f k8s/backend/service.yaml
+        
+        echo "Deploying frontend..."
         kubectl apply -f k8s/frontend/deployment-generated.yaml
         kubectl apply -f k8s/frontend/service.yaml
+        
+        echo "Applying Ingress..."
         kubectl apply -f k8s/ingress-generated.yaml
         
         # 배포 상태 확인
+        echo "Waiting for backend deployment to be ready..."
         kubectl rollout status deployment/backend -n cicd-demo --timeout=300s
+        
+        echo "Waiting for frontend deployment to be ready..."
         kubectl rollout status deployment/frontend -n cicd-demo --timeout=300s
         
         # Ingress 상태 확인 및 ALB DNS 출력
