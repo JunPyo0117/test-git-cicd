@@ -11,6 +11,14 @@ export class MessagesController {
     return this.messagesService.findAll();
   }
 
+  @Get('/')
+  async root(): Promise<{ status: string; timestamp: string }> {
+    return {
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+    };
+  }
+
   @Post()
   async create(@Body() createMessageDto: { text: string }): Promise<Message> {
     return this.messagesService.create(createMessageDto.text);
