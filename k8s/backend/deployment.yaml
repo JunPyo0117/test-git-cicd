@@ -53,6 +53,8 @@ spec:
             secretKeyRef:
               name: db-secret
               key: database
+        - name: TYPEORM_SYNC
+          value: "true"
         resources:
           requests:
             memory: "256Mi"
