@@ -285,6 +285,10 @@ jobs:
         kubectl apply -f k8s/backend/service.yaml
         
         echo "Deploying frontend..."
+        # 기존 CrashLoopBackOff pod들을 강제로 정리
+        echo "Cleaning up any stuck pods..."
+        kubectl delete pods -n cicd-demo -l app=frontend --force --grace-period=0 || true
+        
         kubectl apply -f k8s/frontend/deployment-generated.yaml
         kubectl apply -f k8s/frontend/service.yaml
         
