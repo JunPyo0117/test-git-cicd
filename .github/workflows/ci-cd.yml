@@ -186,20 +186,7 @@ jobs:
         DB_NAME_B64=$(echo -n "cicd_demo" | base64)
         
         # 시크릿 파일 생성
-        cat > k8s/backend/secret-generated.yaml << EOF
-apiVersion: v1
-kind: Secret
-metadata:
-  name: db-secret
-  namespace: cicd-demo
-type: Opaque
-data:
-  host: $DB_HOST_B64
-  port: $DB_PORT_B64
-  username: $DB_USERNAME_B64
-  password: $DB_PASSWORD_B64
-  database: $DB_NAME_B64
-EOF
+        printf "apiVersion: v1\nkind: Secret\nmetadata:\n  name: db-secret\n  namespace: cicd-demo\ntype: Opaque\ndata:\n  host: %s\n  port: %s\n  username: %s\n  password: %s\n  database: %s\n" "$DB_HOST_B64" "$DB_PORT_B64" "$DB_USERNAME_B64" "$DB_PASSWORD_B64" "$DB_NAME_B64" > k8s/backend/secret-generated.yaml
         
         echo "Secret file created successfully"
         echo "Secret file content (for debugging):"
