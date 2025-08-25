@@ -63,6 +63,18 @@ resource "aws_iam_role_policy" "github_actions" {
       {
         Effect = "Allow"
         Action = [
+          "ec2:DescribeSubnets",
+          "ec2:DescribeSecurityGroups",
+          "ec2:DescribeVpcs",
+          "ec2:DescribeInstances",
+          "ec2:DescribeNetworkInterfaces",
+          "ec2:DescribeTags"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
           "ecr:GetAuthorizationToken",
           "ecr:BatchCheckLayerAvailability",
           "ecr:GetDownloadUrlForLayer",
