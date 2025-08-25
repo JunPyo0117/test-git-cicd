@@ -78,7 +78,8 @@ jobs:
       run: |
         npm ci
         npm run build
-        docker build -t frontend .
+        # Force rebuild with no cache to ensure nginx.conf changes are included
+        docker build --no-cache -t frontend .
         docker tag frontend:latest ${{ steps.login-ecr.outputs.registry }}/cicd-demo-frontend:latest
         docker push ${{ steps.login-ecr.outputs.registry }}/cicd-demo-frontend:latest
     
