@@ -18,7 +18,7 @@ function App() {
   // 백엔드에서 메시지 가져오기
   const fetchMessages = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/messages`)
+      const response = await fetch(`${API_BASE_URL}/messages`)
       const data = await response.json()
       setMessages(data)
     } catch (error) {
@@ -32,7 +32,7 @@ function App() {
 
     setLoading(true)
     try {
-      const response = await fetch(`${API_BASE_URL}/api/messages`, {
+      const response = await fetch(`${API_BASE_URL}/messages`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
