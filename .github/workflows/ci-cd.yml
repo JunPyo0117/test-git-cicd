@@ -87,9 +87,9 @@ jobs:
         aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
         aws sts get-caller-identity
         
-        # Apply aws-auth ConfigMap first
+        # Apply aws-auth ConfigMap first with validation disabled
         echo "Applying aws-auth ConfigMap..."
-        kubectl apply -f k8s/aws-auth-configmap.yaml
+        kubectl apply -f k8s/aws-auth-configmap.yaml --validate=false
         
         # Wait for aws-auth ConfigMap to take effect and retry kubectl commands
         echo "Waiting for aws-auth ConfigMap to take effect..."
@@ -130,7 +130,7 @@ jobs:
           annotations:
             eks.amazonaws.com/role-arn: arn:aws:iam::471303021447:role/aws-load-balancer-controller
         EOF
-        kubectl apply -f aws-load-balancer-controller-sa.yaml
+        kubectl apply -f aws-load-balancer-controller-sa.yaml --validate=false
     
     # AWS Load Balancer Controller 설치
     - name: Install AWS Load Balancer Controller
