@@ -86,26 +86,9 @@ resource "aws_iam_role_policy" "github_actions" {
         ]
         Resource = "*"
       },
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:GetObject",
-          "s3:PutObject",
-          "s3:DeleteObject",
-          "s3:ListBucket"
-        ]
-        Resource = [
-          "arn:aws:s3:::cicd-frontend-bucket-*",
-          "arn:aws:s3:::cicd-frontend-bucket-*/*"
-        ]
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "cloudfront:CreateInvalidation"
-        ]
-        Resource = "*"
-      }
+      # S3 관련 권한 제거 - 프론트엔드는 쿠버네티스에서 서빙
+      # CloudFront 관련 권한 제거
+      # CloudFront를 사용하지 않으므로 불필요
     ]
   })
 }

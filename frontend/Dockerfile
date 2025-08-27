@@ -12,30 +12,25 @@ RUN npm install
 # Copy source code
 COPY . .
 
-# Build the app
+# Build the app with environment variables
+ARG VITE_API_URL
+ARG VITE_GOOGLE_MAPS_API_KEY
+ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_GOOGLE_MAPS_API_KEY=$VITE_GOOGLE_MAPS_API_KEY
+
 RUN npm run build
 
-# Production stage - ultra simple static server
-FROM node:18-alpine
+# Production stage - nginx for better performance
+FROM nginx:alpine
 
-# Install serve (better than http-server)
-RUN npm install -g serve
+# Copy nginx configuration
+COPY nginx.conf /etc/nginx/nginx.conf
 
 # Copy built app
-COPY --from=build /app/dist /app
-
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nextjs -u 1001
-
-# Change ownership
-RUN chown -R nextjs:nodejs /app
-
-# Switch to non-root user
-USER nextjs
+COPY --from=build /app/dist /usr/share/nginx/html
 
 # Expose port
-EXPOSE 3000
+EXPOSE 80
 
-# Start server on non-privileged port
-CMD ["serve", "-s", "/app", "-l", "3000"]
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"]

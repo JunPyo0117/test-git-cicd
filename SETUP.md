@@ -132,13 +132,7 @@ GitHub 저장소의 Settings > Secrets and variables > Actions에서 다음 시�
 4. **DB_PASSWORD**
    - RDS 데이터베이스 비밀번호 (terraform output에서 확인)
 
-5. **S3_BUCKET**
-   - S3 버킷 이름 (terraform output에서 확인)
-
-6. **CLOUDFRONT_DISTRIBUTION_ID**
-   - CloudFront 배포 ID (terraform output에서 확인)
-
-7. **API_URL**
+5. **API_URL**
    - 백엔드 API URL (ALB URL, 배포 후 확인)
 
 ## 🚀 CI/CD 파이프라인 실행

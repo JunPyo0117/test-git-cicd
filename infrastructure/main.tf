@@ -292,107 +292,10 @@ resource "aws_db_instance" "main" {
   }
 }
 
-# S3 Bucket for Frontend
-resource "aws_s3_bucket" "frontend" {
-  bucket = "cicd-frontend-bucket-${random_string.bucket_suffix.result}"
-}
+# S3 버킷 제거 - 프론트엔드는 쿠버네티스에서 서빙
 
-resource "aws_s3_bucket_public_access_block" "frontend" {
-  bucket = aws_s3_bucket.frontend.id
-  
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-# CloudFront OAC (OAI는 deprecated)
-resource "aws_cloudfront_origin_access_control" "frontend" {
-  name                              = "cicd-frontend-oac"
-  description                       = "OAC for cicd frontend"
-  origin_access_control_origin_type = "s3"
-  signing_behavior                  = "always"
-  signing_protocol                  = "sigv4"
-}
-
-resource "aws_s3_bucket_policy" "frontend" {
-  bucket = aws_s3_bucket.frontend.id
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid       = "AllowCloudFrontAccess"
-        Effect    = "Allow"
-        Principal = { Service = "cloudfront.amazonaws.com" }
-        Action    = "s3:GetObject"
-        Resource  = "${aws_s3_bucket.frontend.arn}/*"
-        Condition = {
-          StringEquals = {
-            "AWS:SourceArn" = aws_cloudfront_distribution.frontend.arn
-          }
-        }
-      }
-    ]
-  })
-}
-
-# CloudFront Distribution
-resource "aws_cloudfront_distribution" "frontend" {
-  enabled             = true
-  is_ipv6_enabled     = true
-  default_root_object = "index.html"
-  
-  origin {
-    domain_name              = aws_s3_bucket.frontend.bucket_regional_domain_name
-    origin_id                = "S3-${aws_s3_bucket.frontend.id}"
-    origin_access_control_id = aws_cloudfront_origin_access_control.frontend.id
-  }
-  
-  default_cache_behavior {
-    allowed_methods        = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
-    cached_methods         = ["GET", "HEAD"]
-    target_origin_id       = "S3-${aws_s3_bucket.frontend.id}"
-    compress               = true
-    viewer_protocol_policy = "redirect-to-https"
-    
-    cache_policy_id = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # Managed-CachingDisabled
-    
-    # CORS 헤더 추가
-    response_headers_policy_id = aws_cloudfront_response_headers_policy.cors.id
-  }
-  
-  # Handle SPA routing
-  custom_error_response {
-    error_code         = 404
-    response_code      = "200"
-    response_page_path = "/index.html"
-  }
-  
-  custom_error_response {
-    error_code         = 403
-    response_code      = "200"
-    response_page_path = "/index.html"
-  }
-  
-  restrictions {
-    geo_restriction {
-      restriction_type = "none"
-    }
-  }
-  
-  viewer_certificate {
-    acm_certificate_arn      = var.domain_name != "" ? aws_acm_certificate.frontend[0].arn : null
-    ssl_support_method       = var.domain_name != "" ? "sni-only" : null
-    minimum_protocol_version = var.domain_name != "" ? "TLSv1.2_2021" : null
-    cloudfront_default_certificate = var.domain_name == "" ? true : false
-  }
-  
-  aliases = var.domain_name != "" ? [var.domain_name] : null
-  
-  tags = {
-    Name = "cicd-frontend-distribution"
-  }
-}
+# S3 버킷 정책 제거 (CloudFront 없이 직접 접근)
+# CloudFront를 사용하지 않으므로 S3 버킷 정책도 제거
 
 # Random resources
 resource "random_password" "db_password" {
@@ -400,11 +303,7 @@ resource "random_password" "db_password" {
   special = false
 }
 
-resource "random_string" "bucket_suffix" {
-  length  = 8
-  special = false
-  upper   = false
-}
+# S3 버킷을 사용하지 않으므로 bucket_suffix도 제거
 
 # AWS Load Balancer Controller for EKS
 resource "aws_iam_policy" "aws_load_balancer_controller" {
@@ -520,7 +419,7 @@ resource "aws_route53_zone" "main" {
   }
 }
 
-# Route 53 A Record for CloudFront (Frontend)
+# Route 53 A Record for Frontend (EKS Ingress Controller가 생성한 ALB 사용)
 resource "aws_route53_record" "frontend" {
   count = var.domain_name != "" ? 1 : 0
   
@@ -528,10 +427,12 @@ resource "aws_route53_record" "frontend" {
   name    = var.domain_name
   type    = "A"
   
+  # EKS Ingress Controller가 생성한 ALB의 DNS 이름을 사용
+  # 실제 ALB DNS는 Ingress 생성 후에 확인 가능
   alias {
-    name                   = aws_cloudfront_distribution.frontend.domain_name
-    zone_id                = aws_cloudfront_distribution.frontend.hosted_zone_id
-    evaluate_target_health = false
+    name                   = "placeholder-alb-dns-name"  # Ingress 생성 후 업데이트 필요
+    zone_id                = "Z35SXDOTRQ7R7K"  # ALB의 기본 hosted zone ID
+    evaluate_target_health = true
   }
 }
 
@@ -552,20 +453,8 @@ resource "aws_route53_record" "backend" {
   }
 }
 
-# Route 53 AAAA Record for CloudFront (IPv6)
-resource "aws_route53_record" "frontend_ipv6" {
-  count = var.domain_name != "" ? 1 : 0
-  
-  zone_id = aws_route53_zone.main[0].zone_id
-  name    = var.domain_name
-  type    = "AAAA"
-  
-  alias {
-    name                   = aws_cloudfront_distribution.frontend.domain_name
-    zone_id                = aws_cloudfront_distribution.frontend.hosted_zone_id
-    evaluate_target_health = false
-  }
-}
+# Route 53 AAAA Record for Frontend (IPv6) - S3는 IPv6를 지원하지 않으므로 제거
+# S3 버킷은 IPv4만 지원하므로 AAAA 레코드는 불필요
 
 # ACM Certificate for custom domain
 resource "aws_acm_certificate" "frontend" {
@@ -605,56 +494,8 @@ resource "aws_acm_certificate_validation" "frontend" {
 # Application Load Balancer for backend - EKS Ingress Controller가 자동 생성하므로 제거
 # AWS Load Balancer Controller가 Ingress를 통해 ALB를 자동으로 생성합니다.
 
-# CloudFront CORS Response Headers Policy
-resource "aws_cloudfront_response_headers_policy" "cors" {
-  name = "cicd-cors-policy"
-  
-  cors_config {
-    access_control_allow_credentials = false
-    
-    access_control_allow_headers {
-      items = ["*"]
-    }
-    
-    access_control_allow_methods {
-      items = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
-    }
-    
-    access_control_allow_origins {
-      items = ["*"]
-    }
-    
-    access_control_expose_headers {
-      items = ["*"]
-    }
-    
-    access_control_max_age_sec = 600
-    
-    origin_override = true
-  }
-  
-  security_headers_config {
-    content_type_options {
-      override = true
-    }
-    
-    frame_options {
-      frame_option = "SAMEORIGIN"
-      override     = true
-    }
-    
-    referrer_policy {
-      referrer_policy = "strict-origin-when-cross-origin"
-      override        = true
-    }
-    
-    xss_protection {
-      mode_block = true
-      protection = true
-      override   = true
-    }
-  }
-}
+# CloudFront CORS Response Headers Policy 제거
+# CloudFront를 사용하지 않으므로 CORS 정책도 불필요
 
 
 

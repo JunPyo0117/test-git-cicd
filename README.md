@@ -4,7 +4,7 @@
 
 ## 🏗️ 아키텍처
 
-- **Frontend**: React + Vite + TypeScript
+- **Frontend**: React + Vite + TypeScript + Google Maps
 - **Backend**: NestJS + TypeScript
 - **Database**: PostgreSQL (RDS)
 - **Infrastructure**: Terraform + AWS EKS
@@ -29,6 +29,90 @@ GitHub → GitHub Actions → Docker → ECR → EKS
 - kubectl
 - Docker
 - Node.js 18+
+- Google Maps API 키
+
+## 🗺️ Google Maps 설정
+
+### 1. Google Cloud Console에서 API 키 발급
+
+1. [Google Cloud Console](https://console.cloud.google.com/)에 접속
+2. 새 프로젝트 생성 또는 기존 프로젝트 선택
+3. "API 및 서비스" → "라이브러리"로 이동
+4. "Maps JavaScript API" 활성화
+5. "사용자 인증 정보" → "사용자 인증 정보 만들기" → "API 키"
+6. 발급받은 API 키를 안전하게 보관
+
+### 2. 로컬 개발 환경 설정
+
+프론트엔드 디렉토리에서 환경변수 파일을 생성하세요:
+
+```bash
+cd frontend
+cp env.example .env.local
+```
+
+`.env.local` 파일을 편집하여 API 키를 설정:
+
+```env
+# 백엔드 API URL
+VITE_API_URL=http://localhost:3000/api
+
+# Google Maps API 키 (필수)
+VITE_GOOGLE_MAPS_API_KEY=your_actual_google_maps_api_key_here
+```
+
+### 3. API 키 제한 설정 (권장)
+
+보안을 위해 Google Cloud Console에서 API 키에 제한을 설정하세요:
+
+1. **애플리케이션 제한**: HTTP 리퍼러(웹사이트)
+   - `localhost:5173/*` (개발 환경)
+   - `your-domain.com/*` (프로덕션 환경)
+
+2. **API 제한**: Maps JavaScript API만 선택
+
+### 4. 환경변수 설정 (보안)
+
+⚠️ **중요**: API 키가 Git에 노출되지 않도록 환경변수를 안전하게 설정하세요.
+
+#### 로컬 개발 환경
+
+프로젝트 루트에 `.env` 파일을 생성하세요:
+
+```bash
+# .env 파일 생성
+cp env.example .env
+```
+
+`.env` 파일을 편집하여 실제 API 키를 설정:
+
+```env
+# Google Maps API 키 (실제 API 키를 여기에 입력하세요)
+GOOGLE_MAPS_API_KEY=your_actual_google_maps_api_key_here
+
+# 백엔드 API URL
+VITE_API_URL=http://localhost:3001/api
+```
+
+#### Docker 환경
+
+Docker Compose로 실행할 때는 환경변수를 직접 설정하세요:
+
+```bash
+# 환경변수와 함께 실행
+GOOGLE_MAPS_API_KEY=your_actual_google_maps_api_key_here docker-compose up
+```
+
+또는 `.env` 파일을 사용:
+
+```bash
+# .env 파일이 있으면 자동으로 로드됨
+docker-compose up
+```
+
+#### 프로덕션 환경
+
+GitHub Actions에서 시크릿으로 관리됩니다 (아래 참조).
 
 ## 🚀 빠른 시작
 
@@ -50,15 +134,28 @@ GitHub 저장소의 Settings > Secrets and variables > Actions에서 다음 시�
 - `AWS_SECRET_ACCESS_KEY`: AWS 시크릿 액세스 키
 - `DB_HOST`: RDS 엔드포인트
 - `DB_PASSWORD`: RDS 데이터베이스 비밀번호
-- `S3_BUCKET`: S3 버킷 이름
-- `CLOUDFRONT_DISTRIBUTION_ID`: CloudFront 배포 ID
 - `API_URL`: 백엔드 API URL (ALB URL)
+- `GOOGLE_MAPS_API_KEY`: Google Maps API 키
 
-### 3. 코드 푸시로 자동 배포
+### 3. 로컬 개발 서버 실행
+
+```bash
+# 프론트엔드 실행
+cd frontend
+npm install
+npm run dev
+
+# 백엔드 실행 (별도 터미널)
+cd backend
+npm install
+npm run start:dev
+```
+
+### 4. 코드 푸시로 자동 배포
 
 ```bash
 git add .
-git commit -m "Initial deployment"
+git commit -m "Add Google Maps integration"
 git push origin main
 ```
 

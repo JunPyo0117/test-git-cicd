@@ -27,10 +27,124 @@
 
 .app-main {
   flex: 1;
-  max-width: 800px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 2rem;
   width: 100%;
+}
+
+/* 구글 지도 섹션 스타일 */
+.map-section {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  backdrop-filter: blur(10px);
+}
+
+.map-section h2 {
+  margin: 0 0 1rem 0;
+  font-size: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.map-controls {
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.route-toggle-btn {
+  background: linear-gradient(45deg, #4CAF50, #45a049);
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.route-toggle-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.route-info {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 1rem;
+}
+
+.route-info h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1.2rem;
+  color: #4CAF50;
+}
+
+.route-info ol {
+  margin: 0;
+  padding-left: 1.5rem;
+}
+
+.route-info li {
+  margin-bottom: 0.5rem;
+  padding: 0.5rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  border-left: 3px solid #4CAF50;
+}
+
+.route-info .coordinates {
+  display: block;
+  font-size: 0.8rem;
+  opacity: 0.7;
+  margin-top: 0.25rem;
+}
+
+.route-note {
+  margin: 1rem 0 0 0;
+  font-size: 0.9rem;
+  opacity: 0.8;
+  font-style: italic;
+  text-align: center;
+  padding: 0.5rem;
+  background: rgba(76, 175, 80, 0.1);
+  border-radius: 4px;
+}
+
+.google-map {
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-height: 600px;
+}
+
+.map-placeholder {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 2rem;
+  text-align: center;
+  border: 2px dashed rgba(255, 255, 255, 0.3);
+  min-height: 600px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.map-placeholder p {
+  margin: 0.5rem 0;
+  opacity: 0.8;
+}
+
+.map-placeholder p:first-child {
+  font-weight: bold;
+  color: #ff9800;
 }
 
 .messages-container {
@@ -155,6 +269,7 @@
   
   .app-main {
     padding: 1rem;
+    max-width: 100%;
   }
   
   .message-input {
@@ -163,5 +278,39 @@
   
   .message-input button {
     width: 100%;
+  }
+  
+  .map-section {
+    padding: 1rem;
+  }
+  
+  .google-map {
+    height: 400px !important;
+    min-height: 400px;
+  }
+  
+  .map-placeholder {
+    height: 400px;
+    min-height: 400px;
+  }
+  
+  .route-info ol {
+    padding-left: 1rem;
+  }
+  
+  .route-info li {
+    font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .google-map {
+    height: 300px !important;
+    min-height: 300px;
+  }
+  
+  .map-placeholder {
+    height: 300px;
+    min-height: 300px;
   }
 }
